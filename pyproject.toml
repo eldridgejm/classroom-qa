@@ -29,8 +29,9 @@ dev = [
     "mypy>=1.7.0",
 ]
 
-[tool.setuptools]
-packages = ["app"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
