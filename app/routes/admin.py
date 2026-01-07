@@ -187,9 +187,10 @@ async def admin_login(
     # Create admin cookie
     cookie = create_admin_cookie(course, course_config.secret, app.config.settings.secret_key)
 
-    # Redirect to admin dashboard
+    # Redirect to admin dashboard (include root_path for subpath deployments)
+    root_path = request.scope.get("root_path", "")
     response = RedirectResponse(
-        url=f"/c/{course}/admin",
+        url=f"{root_path}/c/{course}/admin",
         status_code=303,
     )
     response.set_cookie(

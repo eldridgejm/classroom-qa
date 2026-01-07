@@ -151,9 +151,10 @@ async def enter_pid(
     # Create PID cookie
     cookie = create_pid_cookie(pid, app.config.settings.secret_key)
 
-    # Redirect to student page
+    # Redirect to student page (include root_path for subpath deployments)
+    root_path = request.scope.get("root_path", "")
     response = RedirectResponse(
-        url=f"/c/{course}",
+        url=f"{root_path}/c/{course}",
         status_code=303,
     )
     response.set_cookie(
