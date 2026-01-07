@@ -553,7 +553,7 @@
     // Student Questions Management
     async function fetchAndDisplayQuestions() {
         try {
-            const response = await fetch(`${rootPath}/c/{{ course_slug }}/admin/questions');
+            const response = await fetch(`${rootPath}/c/{{ course_slug }}/admin/questions`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
