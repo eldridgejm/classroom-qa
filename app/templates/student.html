@@ -239,7 +239,7 @@
                     </button>
                 </div>
 
-                <form id="change-pid-form" method="POST" action="/c/{{ course_slug }}/enter-pid">
+                <form id="change-pid-form" method="POST" action="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/enter-pid">
                     <div class="mb-4">
                         <label for="new-pid" class="block text-sm font-medium text-gray-700 mb-2">
                             Enter your new PID:
@@ -284,6 +284,9 @@
 </div>
 
 <script>
+    // Configuration
+    const rootPath = '{{ request.scope.get("root_path", "") }}';
+
     // Global state
     let currentQuestionId = null;
     let currentQuestionType = null;
@@ -395,7 +398,7 @@
         }
 
         // Submit via fetch
-        fetch(`/c/{{ course_slug }}/answer`, {
+        fetch(`${rootPath}/c/{{ course_slug }}/answer`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -680,7 +683,7 @@
         }
 
         try {
-            const response = await fetch(`/c/{{ course_slug }}/results/${questionId}`);
+            const response = await fetch(`${rootPath}/c/{{ course_slug }}/results/${questionId}`);
             if (!response.ok) {
                 throw new Error('Results not available yet.');
             }
