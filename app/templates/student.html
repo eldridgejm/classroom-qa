@@ -1,0 +1,863 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course_name }} - Student View{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <header class="mb-8">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ course_name }}</h1>
+                <p class="text-gray-600 mt-1">Student View</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 mb-1">Your PID:</p>
+                <button
+                    id="pid-display"
+                    onclick="showChangePIDModal()"
+                    class="px-3 py-1 bg-blue-50 text-blue-900 font-mono text-sm rounded border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition cursor-pointer"
+                    title="Click to change PID">
+                    {{ pid }}
+                </button>
+                <p class="text-xs text-gray-400 mt-1">Click to change</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Session Not Started Message -->
+    <div id="session-not-started" class="{% if session_is_live %}hidden{% endif %} max-w-2xl mx-auto">
+        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-8 text-center">
+            <svg class="mx-auto h-16 w-16 text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Class Session Not Started</h2>
+            <p class="text-gray-600 mb-4">The instructor hasn't started the class session yet.</p>
+            <p class="text-sm text-gray-500">This page will automatically update when the session begins.</p>
+        </div>
+    </div>
+
+    <!-- Two-pane layout: Answer and Ask -->
+    <div id="session-interface" class="grid grid-cols-1 lg:grid-cols-2 gap-6 {% if not session_is_live %}hidden{% endif %}">
+        <!-- Left Pane: Answer -->
+        <div class="pane">
+            <h2 class="text-xl font-semibold mb-4">Answer</h2>
+            <div id="answer-pane" class="min-h-[300px]">
+                <!-- Default: No Question -->
+                <div id="no-question-state" class="p-8 text-center text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-sm">Waiting for question...</p>
+                    <p class="text-xs mt-2">Questions will appear here when the instructor starts one</p>
+                </div>
+
+                <!-- MCQ Question UI (hidden by default) -->
+                <div id="mcq-question" class="hidden">
+                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p class="text-sm font-medium text-blue-900">Multiple Choice Question</p>
+                        <p class="text-xs text-blue-700 mt-1">Select your answer below</p>
+                    </div>
+                    <div id="mcq-options" class="space-y-2">
+                        <!-- Options will be dynamically inserted here -->
+                    </div>
+                    <div id="answer-feedback" class="mt-4 hidden">
+                        <div class="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                            <p><strong>✓ Answer submitted!</strong> You can change your answer anytime.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- True/False Question UI (hidden by default) -->
+                <div id="tf-question" class="hidden">
+                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p class="text-sm font-medium text-blue-900">True or False Question</p>
+                        <p class="text-xs text-blue-700 mt-1">Select True or False</p>
+                    </div>
+                    <div class="space-y-2">
+                        <button
+                            class="tf-option w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                            data-value="true"
+                            hx-post="/c/{{ course_slug }}/answer"
+                            hx-swap="none"
+                            hx-on::after-request="handleAnswerSubmit(event)">
+                            <span class="font-medium">True</span>
+                        </button>
+                        <button
+                            class="tf-option w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+                            data-value="false"
+                            hx-post="/c/{{ course_slug }}/answer"
+                            hx-swap="none"
+                            hx-on::after-request="handleAnswerSubmit(event)">
+                            <span class="font-medium">False</span>
+                        </button>
+                    </div>
+                    <div id="tf-feedback" class="mt-4 hidden">
+                        <div class="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                            <p><strong>✓ Answer submitted!</strong> You can change your answer anytime.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Numeric Question UI (hidden by default) -->
+                <div id="numeric-question" class="hidden">
+                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p class="text-sm font-medium text-blue-900">Numeric Question</p>
+                        <p class="text-xs text-blue-700 mt-1">Enter a number or expression (e.g., 42, 3.14, or 1/2)</p>
+                    </div>
+                    <div class="space-y-3">
+                        <input
+                            type="text"
+                            id="numeric-input"
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                            placeholder="Enter your answer..."
+                        />
+                        <button
+                            id="numeric-submit-btn"
+                            class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                            onclick="submitNumericAnswer()">
+                            Submit Answer
+                        </button>
+                    </div>
+                    <div id="numeric-feedback" class="mt-4 hidden">
+                        <div class="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                            <p><strong>✓ Answer submitted!</strong> You can change your answer anytime.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Question Ended State (hidden by default) -->
+                <div id="question-ended" class="hidden p-8 text-center text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-sm font-medium">Question ended</p>
+                    <p class="text-xs mt-2">Waiting for next question...</p>
+                </div>
+
+                <!-- Results Panel -->
+                <div id="results-panel" class="hidden mt-6">
+                    <div class="p-4 bg-indigo-50 border border-indigo-200 rounded">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-semibold text-indigo-900">Results shared</p>
+                                <p id="results-question-type" class="text-xs text-indigo-700 mt-0.5"></p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span id="results-total" class="text-xs font-medium text-indigo-800">0 responses</span>
+                                <button
+                                    type="button"
+                                    class="text-xs text-indigo-600 hover:text-indigo-900 font-medium"
+                                    onclick="dismissResultsPanel()">
+                                    Hide
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-4 space-y-3" id="results-bar-container">
+                            <!-- Bars inserted dynamically -->
+                        </div>
+                        <div class="mt-4 hidden space-y-2" id="results-numeric-container">
+                            <!-- Numeric rows inserted dynamically -->
+                        </div>
+                        <div id="results-status-message" class="mt-4 text-sm text-indigo-900"></div>
+                        <p id="results-error" class="hidden mt-3 text-sm text-red-700"></p>
+                        <p class="mt-3 text-xs text-indigo-700">
+                            Your choice is highlighted in purple when available.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Pane: Ask -->
+        <div class="pane">
+            <h2 class="text-xl font-semibold mb-4">Ask</h2>
+
+            <form id="ask-form" class="space-y-4"
+                hx-post="/c/{{ course_slug }}/ask"
+                hx-swap="none"
+                hx-on::after-request="handleAskSubmit(event)">
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label for="question" class="block text-sm font-medium text-gray-700">
+                            Ask a question
+                        </label>
+                        <span id="char-counter" class="text-xs text-gray-500">0 / 1000</span>
+                    </div>
+                    <textarea
+                        id="question"
+                        name="question"
+                        rows="6"
+                        maxlength="1000"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        placeholder="Type your question here..."
+                        oninput="updateCharCounter()"
+                    ></textarea>
+                </div>
+
+                <button
+                    id="ask-submit-btn"
+                    type="submit"
+                    class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Submit Question
+                </button>
+            </form>
+
+            <!-- Success feedback -->
+            <div id="ask-success" class="hidden mt-4 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                <p><strong>✓ Question submitted!</strong> Your question has been sent to the instructor.</p>
+            </div>
+
+            <!-- Error feedback -->
+            <div id="ask-error" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                <p id="ask-error-message"></p>
+            </div>
+
+            <!-- Rate limit feedback -->
+            <div id="ask-ratelimit" class="hidden mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                <p><strong>⏱ Please wait</strong> <span id="ratelimit-message"></span></p>
+            </div>
+
+            <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                <p><strong>Tip:</strong> Questions are visible to your instructor in real-time.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change PID Modal (hidden by default) -->
+    <div id="change-pid-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Change PID</h3>
+                    <button
+                        onclick="hideChangePIDModal()"
+                        class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="change-pid-form" method="POST" action="/c/{{ course_slug }}/enter-pid">
+                    <div class="mb-4">
+                        <label for="new-pid" class="block text-sm font-medium text-gray-700 mb-2">
+                            Enter your new PID:
+                        </label>
+                        <input
+                            type="text"
+                            id="new-pid"
+                            name="pid"
+                            placeholder="A12345678"
+                            pattern="A\d{8}"
+                            maxlength="9"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                            required>
+                        <p class="text-xs text-gray-500 mt-1">Format: A followed by 8 digits</p>
+                    </div>
+
+                    <div id="pid-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                        <!-- Error message will be inserted here -->
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button
+                            type="submit"
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
+                            Change PID
+                        </button>
+                        <button
+                            type="button"
+                            onclick="hideChangePIDModal()"
+                            class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-medium">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                    <p><strong>Note:</strong> Changing your PID will reload the page with your new PID.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global state
+    let currentQuestionId = null;
+    let currentQuestionType = null;
+    let currentOptions = null;
+    let resultsVisible = false;
+
+    // Hide all question UI panels
+    function hideAllQuestionPanels() {
+        document.getElementById('no-question-state').classList.add('hidden');
+        document.getElementById('mcq-question').classList.add('hidden');
+        document.getElementById('tf-question').classList.add('hidden');
+        document.getElementById('numeric-question').classList.add('hidden');
+        document.getElementById('question-ended').classList.add('hidden');
+    }
+
+    // Hide all feedback messages
+    function hideAllFeedback() {
+        document.getElementById('answer-feedback').classList.add('hidden');
+        document.getElementById('tf-feedback').classList.add('hidden');
+        document.getElementById('numeric-feedback').classList.add('hidden');
+    }
+
+    // Show a specific question type
+    function showQuestion(questionId, type, options = null) {
+        currentQuestionId = questionId;
+        currentQuestionType = type;
+        currentOptions = options;
+        resetResultsPanel();
+
+        hideAllQuestionPanels();
+        hideAllFeedback(); // Hide feedback from previous question
+
+        if (type === 'mcq') {
+            showMCQQuestion(options);
+        } else if (type === 'tf') {
+            showTFQuestion();
+        } else if (type === 'numeric') {
+            showNumericQuestion();
+        }
+    }
+
+    // Show MCQ question with options
+    function showMCQQuestion(options) {
+        const container = document.getElementById('mcq-options');
+        container.innerHTML = '';
+
+        options.forEach(option => {
+            const button = document.createElement('button');
+            button.className = 'mcq-option w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition';
+            button.dataset.value = option;
+            button.innerHTML = `<span class="font-medium text-lg">${option}</span>`;
+
+            // Add HTMX attributes
+            button.setAttribute('hx-post', `/c/{{ course_slug }}/answer`);
+            button.setAttribute('hx-vals', JSON.stringify({
+                question_id: currentQuestionId,
+                response: option
+            }));
+            button.setAttribute('hx-swap', 'none');
+            button.setAttribute('hx-on::after-request', 'handleAnswerSubmit(event)');
+
+            container.appendChild(button);
+        });
+
+        // Re-initialize HTMX for new elements
+        htmx.process(container);
+
+        document.getElementById('mcq-question').classList.remove('hidden');
+    }
+
+    // Show T/F question
+    function showTFQuestion() {
+        // Update HTMX values for T/F buttons and reset styling
+        const tfButtons = document.querySelectorAll('.tf-option');
+        tfButtons.forEach(button => {
+            const value = button.dataset.value === 'true';
+            button.setAttribute('hx-vals', JSON.stringify({
+                question_id: currentQuestionId,
+                response: value
+            }));
+            // Clear any selected state from previous question
+            button.classList.remove('answer-selected');
+        });
+
+        document.getElementById('tf-question').classList.remove('hidden');
+    }
+
+    // Show numeric question
+    function showNumericQuestion() {
+        document.getElementById('numeric-input').value = '';
+        document.getElementById('numeric-feedback').classList.add('hidden');
+        document.getElementById('numeric-question').classList.remove('hidden');
+    }
+
+    // Submit numeric answer
+    function submitNumericAnswer() {
+        const input = document.getElementById('numeric-input').value.trim();
+
+        if (!input) {
+            alert('Please enter an answer');
+            return;
+        }
+
+        // Try to parse as number, otherwise send as string (for fractions like "1/2")
+        let value = input;
+        const parsed = parseFloat(input);
+        if (!isNaN(parsed) && parsed.toString() === input) {
+            value = parsed;
+        }
+
+        // Submit via fetch
+        fetch(`/c/{{ course_slug }}/answer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question_id: currentQuestionId,
+                response: value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'submitted') {
+                document.getElementById('numeric-feedback').classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to submit answer. Please try again.');
+        });
+    }
+
+    // Handle answer submission response
+    function handleAnswerSubmit(event) {
+        console.log('handleAnswerSubmit called:', event);
+        console.log('  successful:', event.detail.successful);
+        console.log('  currentQuestionType:', currentQuestionType);
+        console.log('  requestConfig:', event.detail.requestConfig);
+
+        if (event.detail.successful) {
+            // Show feedback based on question type
+            if (currentQuestionType === 'mcq') {
+                document.getElementById('answer-feedback').classList.remove('hidden');
+
+                // Highlight selected option - simple class toggle
+                // Check if parameters is string or object
+                let params = event.detail.requestConfig.parameters;
+                if (typeof params === 'string') {
+                    params = JSON.parse(params);
+                }
+                const selectedValue = params.response;
+                console.log('  MCQ selected value:', selectedValue);
+
+                document.querySelectorAll('.mcq-option').forEach(btn => {
+                    if (btn.dataset.value === selectedValue) {
+                        console.log('  Adding answer-selected to button:', btn.dataset.value);
+                        btn.classList.add('answer-selected');
+
+                        // Debug: check if class was added
+                        setTimeout(() => {
+                            const hasClass = btn.classList.contains('answer-selected');
+                            const computedBg = window.getComputedStyle(btn).backgroundColor;
+                            const computedBorder = window.getComputedStyle(btn).borderColor;
+                            console.log('  After add - hasClass:', hasClass, 'bg:', computedBg, 'border:', computedBorder);
+                        }, 100);
+                    } else {
+                        btn.classList.remove('answer-selected');
+                    }
+                });
+            } else if (currentQuestionType === 'tf') {
+                document.getElementById('tf-feedback').classList.remove('hidden');
+
+                // Highlight selected option - simple class toggle
+                // Check if parameters is string or object
+                let params = event.detail.requestConfig.parameters;
+                if (typeof params === 'string') {
+                    params = JSON.parse(params);
+                }
+                const selectedValue = params.response;
+                console.log('  T/F selected value:', selectedValue);
+
+                document.querySelectorAll('.tf-option').forEach(btn => {
+                    if (btn.dataset.value === selectedValue.toString()) {
+                        console.log('  Adding answer-selected to T/F button:', btn.dataset.value);
+                        btn.classList.add('answer-selected');
+
+                        // Debug: check if class was added
+                        setTimeout(() => {
+                            const hasClass = btn.classList.contains('answer-selected');
+                            const computedBg = window.getComputedStyle(btn).backgroundColor;
+                            console.log('  T/F After add - hasClass:', hasClass, 'bg:', computedBg);
+                        }, 100);
+                    } else {
+                        btn.classList.remove('answer-selected');
+                    }
+                });
+            }
+        } else {
+            console.log('  Request was not successful');
+            alert('Failed to submit answer. Please try again.');
+        }
+    }
+
+    // Handle question ended
+    function handleQuestionEnded() {
+        currentQuestionId = null;
+        currentQuestionType = null;
+        currentOptions = null;
+
+        hideAllQuestionPanels();
+        document.getElementById('question-ended').classList.remove('hidden');
+    }
+
+    function resetResultsPanel() {
+        const panel = document.getElementById('results-panel');
+        const barContainer = document.getElementById('results-bar-container');
+        const numericContainer = document.getElementById('results-numeric-container');
+        const statusMessage = document.getElementById('results-status-message');
+        const errorEl = document.getElementById('results-error');
+
+        if (!panel || !barContainer || !numericContainer || !statusMessage || !errorEl) {
+            return;
+        }
+
+        panel.classList.add('hidden');
+        barContainer.innerHTML = '';
+        numericContainer.innerHTML = '';
+        numericContainer.classList.add('hidden');
+        statusMessage.textContent = '';
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+
+        resultsVisible = false;
+    }
+
+    function dismissResultsPanel() {
+        const panel = document.getElementById('results-panel');
+
+        if (!panel) {
+            return;
+        }
+
+        panel.classList.add('hidden');
+        resultsVisible = false;
+    }
+
+    function formatResultsQuestionType(type) {
+        if (type === 'mcq') return 'Multiple choice distribution';
+        if (type === 'tf') return 'True/False distribution';
+        if (type === 'numeric') return 'Numeric response distribution';
+        return 'Class distribution';
+    }
+
+    function normalizeResultValue(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value === 'string') {
+            return value.toLowerCase();
+        }
+        if (typeof value === 'boolean') {
+            return value.toString().toLowerCase();
+        }
+        return String(value);
+    }
+
+    function formatAnswerValue(value) {
+        if (value === null || value === undefined) {
+            return 'No answer';
+        }
+        if (typeof value === 'boolean') {
+            return value ? 'True' : 'False';
+        }
+        return value.toString();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : text;
+        return div.innerHTML;
+    }
+
+    function renderResultsPanel(data) {
+        const panel = document.getElementById('results-panel');
+        const questionTypeLabel = document.getElementById('results-question-type');
+        const totalLabel = document.getElementById('results-total');
+        const barContainer = document.getElementById('results-bar-container');
+        const numericContainer = document.getElementById('results-numeric-container');
+        const statusMessage = document.getElementById('results-status-message');
+        const errorEl = document.getElementById('results-error');
+
+        if (!panel || !questionTypeLabel || !totalLabel || !barContainer || !numericContainer || !statusMessage || !errorEl) {
+            return;
+        }
+
+        panel.classList.remove('hidden');
+        barContainer.innerHTML = '';
+        numericContainer.innerHTML = '';
+        errorEl.classList.add('hidden');
+        statusMessage.textContent = '';
+        resultsVisible = true;
+
+        questionTypeLabel.textContent = formatResultsQuestionType(data.type);
+        totalLabel.textContent = `${data.total} response${data.total === 1 ? '' : 's'}`;
+
+        const normalizedAnswer = normalizeResultValue(data.your_answer);
+        const hasAnswer = normalizedAnswer !== null;
+
+        if (data.type === 'mcq' || data.type === 'tf') {
+            barContainer.classList.remove('hidden');
+            numericContainer.classList.add('hidden');
+
+            const options = (data.options && data.options.length > 0)
+                ? data.options
+                : (data.type === 'tf' ? ['true', 'false'] : Object.keys(data.counts));
+
+            options.forEach(option => {
+                const count = data.counts[option] || 0;
+                const percentage = data.percentages[option] || 0;
+                const isStudentChoice = hasAnswer && normalizeResultValue(option) === normalizedAnswer;
+                const highlightClasses = isStudentChoice
+                    ? 'border border-purple-400 bg-purple-50 shadow-sm'
+                    : 'border border-indigo-100 bg-white';
+
+                const indicator = isStudentChoice
+                    ? '<p class="mt-2 text-xs font-medium text-purple-700">Your answer</p>'
+                    : '';
+
+                barContainer.innerHTML += `
+                    <div class="p-3 rounded ${highlightClasses}">
+                        <div class="flex justify-between text-sm font-medium text-indigo-900">
+                            <span>${escapeHtml(option)}</span>
+                            <span>${count} (${percentage}%)</span>
+                        </div>
+                        <div class="mt-2 h-3 bg-indigo-100 rounded-full overflow-hidden">
+                            <div class="h-3 rounded-full bg-indigo-500" style="width: ${percentage}%"></div>
+                        </div>
+                        ${indicator}
+                    </div>
+                `;
+            });
+        } else {
+            barContainer.classList.add('hidden');
+            numericContainer.classList.remove('hidden');
+
+            const sorted = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
+
+            if (sorted.length === 0) {
+                numericContainer.innerHTML = '<p class="text-sm text-indigo-900">No responses yet.</p>';
+            } else {
+                sorted.forEach(([value, count]) => {
+                    const percentage = data.percentages[value] || 0;
+                    const isStudentChoice = hasAnswer && normalizeResultValue(value) === normalizedAnswer;
+                    const highlightClasses = isStudentChoice
+                        ? 'border border-purple-400 bg-purple-50'
+                        : 'border border-indigo-100 bg-white';
+
+                    numericContainer.innerHTML += `
+                        <div class="p-2 rounded ${highlightClasses}">
+                            <div class="flex justify-between text-sm text-indigo-900">
+                                <span>${escapeHtml(value)}</span>
+                                <span>${count} (${percentage}%)</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        if (hasAnswer) {
+            statusMessage.textContent = `Your answer: ${formatAnswerValue(data.your_answer)}`;
+        } else {
+            statusMessage.textContent = 'You did not submit an answer to this question.';
+        }
+    }
+
+    function showResultsError(message) {
+        resetResultsPanel();
+        const panel = document.getElementById('results-panel');
+        const errorEl = document.getElementById('results-error');
+        if (!panel || !errorEl) {
+            return;
+        }
+        panel.classList.remove('hidden');
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        resultsVisible = true;
+    }
+
+    async function fetchResultsForQuestion(questionId) {
+        if (!questionId) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/c/{{ course_slug }}/results/${questionId}`);
+            if (!response.ok) {
+                throw new Error('Results not available yet.');
+            }
+            const data = await response.json();
+            renderResultsPanel(data);
+        } catch (error) {
+            console.error('Failed to load results:', error);
+            showResultsError(error.message || 'Failed to load results.');
+        }
+    }
+
+    // SSE Connection using native EventSource API
+    const eventSource = new EventSource('/sse/student/{{ course_slug }}');
+
+    eventSource.addEventListener('session_started', function(event) {
+        console.log('SSE: Session started', event);
+        // Show the interface and hide the "not started" message
+        document.getElementById('session-not-started').classList.add('hidden');
+        document.getElementById('session-interface').classList.remove('hidden');
+        resetResultsPanel();
+    });
+
+    eventSource.addEventListener('session_stopped', function(event) {
+        console.log('SSE: Session stopped', event);
+        // Hide the interface and show the "not started" message
+        document.getElementById('session-interface').classList.add('hidden');
+        document.getElementById('session-not-started').classList.remove('hidden');
+        // Also clear any active question
+        handleQuestionEnded();
+    });
+
+    eventSource.addEventListener('question_started', function(event) {
+        console.log('SSE: Question started', event);
+        const data = JSON.parse(event.data);
+
+        // Show the question based on type
+        showQuestion(data.question_id, data.type, data.options || null);
+    });
+
+    eventSource.addEventListener('question_stopped', function(event) {
+        console.log('SSE: Question stopped', event);
+        // Show question ended state
+        handleQuestionEnded();
+    });
+
+    eventSource.addEventListener('results_published', function(event) {
+        console.log('SSE: Results published', event);
+        let data = {};
+        try {
+            data = JSON.parse(event.data);
+        } catch (err) {
+            data = {};
+        }
+        if (data.question_id) {
+            fetchResultsForQuestion(data.question_id);
+        }
+    });
+
+    // For testing/demo: Simulate receiving a question
+    // Uncomment the line below to test without SSE:
+    // showQuestion('q-demo-123', 'mcq', ['A', 'B', 'C', 'D']);
+
+    // Ask form functions
+    function updateCharCounter() {
+        const textarea = document.getElementById('question');
+        const counter = document.getElementById('char-counter');
+        const length = textarea.value.length;
+        counter.textContent = `${length} / 1000`;
+
+        // Change color when approaching limit
+        if (length > 900) {
+            counter.classList.add('text-red-600', 'font-medium');
+            counter.classList.remove('text-gray-500');
+        } else if (length > 800) {
+            counter.classList.add('text-yellow-600', 'font-medium');
+            counter.classList.remove('text-gray-500', 'text-red-600');
+        } else {
+            counter.classList.remove('text-red-600', 'text-yellow-600', 'font-medium');
+            counter.classList.add('text-gray-500');
+        }
+    }
+
+    function hideAllAskFeedback() {
+        document.getElementById('ask-success').classList.add('hidden');
+        document.getElementById('ask-error').classList.add('hidden');
+        document.getElementById('ask-ratelimit').classList.add('hidden');
+    }
+
+    function handleAskSubmit(event) {
+        console.log('handleAskSubmit called:', event);
+        console.log('  successful:', event.detail.successful);
+        console.log('  status:', event.detail.xhr.status);
+
+        hideAllAskFeedback();
+
+        const submitBtn = document.getElementById('ask-submit-btn');
+        const textarea = document.getElementById('question');
+
+        if (event.detail.successful) {
+            // Success
+            document.getElementById('ask-success').classList.remove('hidden');
+
+            // Clear the form
+            textarea.value = '';
+            updateCharCounter();
+
+            // Hide success message after 5 seconds
+            setTimeout(() => {
+                document.getElementById('ask-success').classList.add('hidden');
+            }, 5000);
+        } else {
+            // Error
+            const status = event.detail.xhr.status;
+
+            if (status === 429) {
+                // Rate limited
+                try {
+                    const data = JSON.parse(event.detail.xhr.responseText);
+                    const retryAfter = data.retry_after || 10;
+                    document.getElementById('ratelimit-message').textContent =
+                        `You can ask another question in ${retryAfter} seconds.`;
+                    document.getElementById('ask-ratelimit').classList.remove('hidden');
+
+                    // Hide rate limit message after retryAfter seconds
+                    setTimeout(() => {
+                        document.getElementById('ask-ratelimit').classList.add('hidden');
+                    }, retryAfter * 1000);
+                } catch (e) {
+                    document.getElementById('ask-error-message').textContent =
+                        'Rate limit exceeded. Please wait before asking another question.';
+                    document.getElementById('ask-error').classList.remove('hidden');
+                }
+            } else {
+                // Other error
+                try {
+                    const data = JSON.parse(event.detail.xhr.responseText);
+                    document.getElementById('ask-error-message').textContent =
+                        data.detail || 'Failed to submit question. Please try again.';
+                } catch (e) {
+                    document.getElementById('ask-error-message').textContent =
+                        'Failed to submit question. Please try again.';
+                }
+                document.getElementById('ask-error').classList.remove('hidden');
+
+                // Hide error message after 5 seconds
+                setTimeout(() => {
+                    document.getElementById('ask-error').classList.add('hidden');
+                }, 5000);
+            }
+        }
+    }
+
+    // PID change modal functions
+    function showChangePIDModal() {
+        document.getElementById('change-pid-modal').classList.remove('hidden');
+        document.getElementById('new-pid').focus();
+        document.getElementById('pid-error').classList.add('hidden');
+    }
+
+    function hideChangePIDModal() {
+        document.getElementById('change-pid-modal').classList.add('hidden');
+        document.getElementById('new-pid').value = '';
+        document.getElementById('pid-error').classList.add('hidden');
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('change-pid-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            hideChangePIDModal();
+        }
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideChangePIDModal();
+        }
+    });
+</script>
+{% endblock %}

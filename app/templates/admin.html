@@ -1,0 +1,687 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - {{ course_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <header class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">{{ course_name }}</h1>
+        <p class="text-gray-600 mt-1">Admin Dashboard</p>
+    </header>
+
+    <!-- Two-pane layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Pane: Question Management -->
+        <div class="pane">
+            <h2 class="text-xl font-semibold mb-4">Question Management</h2>
+
+            <!-- Session Controls -->
+            <div class="mb-6" id="session-controls">
+                <h3 class="text-lg font-medium mb-2">Session</h3>
+                <div class="flex gap-2">
+                    <button
+                        id="session-toggle-btn"
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        hx-post="/c/{{ course_slug }}/admin/session/start"
+                        hx-swap="none"
+                        hx-on::after-request="handleSessionToggle(event)">
+                        Start Session
+                    </button>
+                </div>
+                <div id="session-status" class="mt-2 text-sm">
+                    <span class="text-gray-600">Status: <span id="session-status-text" class="font-medium">Stopped</span></span>
+                </div>
+                <div class="mt-3">
+                    <a
+                        href="/c/{{ course_slug }}/admin/archives"
+                        class="inline-block px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700">
+                        Download Session Data
+                    </a>
+                </div>
+            </div>
+
+            <!-- Question Creation / Live Distribution Container -->
+            <div class="mb-6">
+                <!-- Question Creation Buttons (shown when no question active) -->
+                <div id="question-controls">
+                    <h3 class="text-lg font-medium mb-2">Create Question</h3>
+                    <div id="question-buttons" class="flex flex-col gap-2">
+                        <button
+                            class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-vals='{"type": "mcq", "options": ["A", "B", "C", "D"]}'
+                            hx-swap="none"
+                            hx-on::after-request="handleQuestionCreated(event)"
+                            disabled>
+                            Multiple Choice (A/B/C/D)
+                        </button>
+                        <button
+                            class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-vals='{"type": "tf"}'
+                            hx-swap="none"
+                            hx-on::after-request="handleQuestionCreated(event)"
+                            disabled>
+                            True/False
+                        </button>
+                        <button
+                            class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-vals='{"type": "numeric"}'
+                            hx-swap="none"
+                            hx-on::after-request="handleQuestionCreated(event)"
+                            disabled>
+                            Numeric
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Distribution (shown when question active, replaces buttons) -->
+                <div id="distribution-section" class="hidden">
+                    <h3 class="text-lg font-medium mb-4">Live Distribution</h3>
+
+                    <!-- Current Question Display -->
+                    <div class="mb-4">
+                        <div class="p-4 bg-blue-50 border border-blue-200 rounded">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <p class="font-medium text-blue-900" id="question-type-display"></p>
+                                    <p class="text-sm text-blue-700" id="question-options-display"></p>
+                                </div>
+                                <button
+                                    id="stop-question-btn"
+                                    class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                                    hx-swap="none"
+                                    hx-on::after-request="handleQuestionStopped(event)">
+                                    Stop Question
+                                </button>
+                            </div>
+                            <label class="mt-3 flex items-center gap-2 text-sm text-blue-900">
+                                <input
+                                    id="auto-share-toggle"
+                                    type="checkbox"
+                                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                >
+                                <span>Auto-share distribution with students when stopping</span>
+                            </label>
+                            <p class="text-xs text-blue-600 mt-2">Question ID: <span id="current-question-id"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- Distribution Display -->
+                    <div id="distribution-container">
+                        <div class="bg-white p-4 border border-gray-200 rounded">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-sm font-medium text-gray-700">Total Responses: <span id="total-responses" class="text-blue-600">0</span></span>
+                            </div>
+                            <!-- MCQ/T-F Bar Chart -->
+                            <div id="bar-chart-container" class="hidden space-y-3">
+                                <!-- Bars will be dynamically inserted here -->
+                            </div>
+                            <!-- Numeric List -->
+                            <div id="numeric-list-container" class="hidden">
+                                <div class="space-y-2 max-h-64 overflow-y-auto" id="numeric-list">
+                                    <!-- Numeric values will be dynamically inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Pane: Student Questions -->
+        <div class="pane">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Student Questions</h2>
+                <span id="question-count-badge" class="hidden px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                    0 questions
+                </span>
+            </div>
+
+            <!-- Empty State (shown when no questions) -->
+            <div id="questions-empty-state" class="p-8 text-center text-gray-500">
+                <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <p class="text-sm font-medium">No questions yet</p>
+                <p class="text-xs mt-2">Student questions will appear here during the session</p>
+            </div>
+
+            <!-- Questions List -->
+            <div id="questions-list" class="hidden space-y-3 max-h-[600px] overflow-y-auto">
+                <!-- Questions will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Session management
+    // Initialize from backend state
+    let sessionIsLive = {{ 'true' if session_is_live else 'false' }};
+    let autoShareResults = false;
+    const autoShareInFlight = new Set();
+
+    // Update UI to match initial state
+    // Call after page loads
+    window.addEventListener('DOMContentLoaded', function() {
+        updateSessionUI();
+        initializeAutoShareToggle();
+    });
+
+    function initializeAutoShareToggle() {
+        try {
+            const storedPreference = localStorage.getItem('autoShareResults');
+            autoShareResults = storedPreference === null ? true : storedPreference === 'true';
+        } catch (err) {
+            autoShareResults = true;
+        }
+
+        const toggle = document.getElementById('auto-share-toggle');
+        if (toggle) {
+            toggle.checked = autoShareResults;
+            toggle.addEventListener('change', function() {
+                autoShareResults = toggle.checked;
+                try {
+                    localStorage.setItem('autoShareResults', autoShareResults ? 'true' : 'false');
+                } catch (err) {
+                    // Ignore storage errors
+                }
+            });
+        }
+    }
+
+    function handleSessionToggle(event) {
+        if (event.detail.successful) {
+            // Toggle the session state
+            sessionIsLive = !sessionIsLive;
+            updateSessionUI();
+        }
+    }
+
+    function updateSessionUI() {
+        const toggleBtn = document.getElementById('session-toggle-btn');
+        const statusText = document.getElementById('session-status-text');
+
+        if (sessionIsLive) {
+            // Session is now live
+            toggleBtn.textContent = 'Stop Session';
+            toggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+            toggleBtn.setAttribute('hx-post', '/c/{{ course_slug }}/admin/session/stop');
+            htmx.process(toggleBtn);
+
+            statusText.textContent = 'Live';
+            statusText.classList.add('text-green-600');
+
+            // Enable question creation buttons
+            document.querySelectorAll('.question-create-btn').forEach(btn => {
+                btn.disabled = false;
+            });
+
+            // Fetch student questions
+            fetchAndDisplayQuestions();
+        } else {
+            // Session is now stopped
+            toggleBtn.textContent = 'Start Session';
+            toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            toggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            toggleBtn.setAttribute('hx-post', '/c/{{ course_slug }}/admin/session/start');
+            htmx.process(toggleBtn);
+
+            statusText.textContent = 'Stopped';
+            statusText.classList.remove('text-green-600');
+
+            // Disable question creation buttons
+            document.querySelectorAll('.question-create-btn').forEach(btn => {
+                btn.disabled = true;
+            });
+
+            // Hide distribution section
+            hideDistribution();
+        }
+    }
+
+    // Question management
+    function handleQuestionCreated(event) {
+        if (event.detail.successful) {
+            const response = JSON.parse(event.detail.xhr.responseText);
+            const questionId = response.question_id;
+
+            // Get question type from request
+            // requestConfig.parameters is already an object, no need to parse
+            const requestBody = event.detail.requestConfig.parameters;
+            const questionType = requestBody.type;
+            const options = requestBody.options;
+
+            // Update current question display
+            document.getElementById('current-question-id').textContent = questionId;
+
+            let typeDisplay = '';
+            let optionsDisplay = '';
+
+            if (questionType === 'mcq') {
+                typeDisplay = 'Multiple Choice Question';
+                optionsDisplay = 'Options: ' + options.join(', ');
+            } else if (questionType === 'tf') {
+                typeDisplay = 'True/False Question';
+                optionsDisplay = '';
+            } else if (questionType === 'numeric') {
+                typeDisplay = 'Numeric Question';
+                optionsDisplay = '';
+            }
+
+            document.getElementById('question-type-display').textContent = typeDisplay;
+            document.getElementById('question-options-display').textContent = optionsDisplay;
+
+            // Set stop button URL
+            const stopBtn = document.getElementById('stop-question-btn');
+            stopBtn.setAttribute(
+                'hx-post',
+                `/c/{{ course_slug }}/admin/question/${questionId}/stop`
+            );
+            stopBtn.dataset.questionId = questionId;
+            // Re-process with HTMX to recognize new attributes
+            htmx.process(stopBtn);
+
+            // Fetch and display distribution (this will show the distribution section)
+            updateDistributionOnQuestionStart();
+        }
+    }
+
+    function handleQuestionStopped(event) {
+        if (event.detail.successful) {
+            // Hide distribution (this will show question creation buttons)
+            updateDistributionOnQuestionStop();
+
+            let questionId = null;
+            try {
+                const responseText = event.detail.xhr?.responseText;
+                if (responseText) {
+                    const data = JSON.parse(responseText);
+                    questionId = data.question_id;
+                }
+            } catch (err) {
+                // Ignore JSON parsing issues
+            }
+
+            if (!questionId) {
+                const stopBtn = document.getElementById('stop-question-btn');
+                questionId = stopBtn?.dataset?.questionId || null;
+            }
+
+            maybeAutoShareResults(questionId);
+        }
+    }
+
+    // SSE Connection using native EventSource API
+    const eventSource = new EventSource('/sse/admin/{{ course_slug }}');
+
+    eventSource.addEventListener('session_started', function(event) {
+        console.log('SSE: Session started', event);
+        // Update session state and UI
+        sessionIsLive = true;
+        updateSessionUI();
+        // Fetch student questions
+        onSessionStarted();
+    });
+
+    eventSource.addEventListener('session_stopped', function(event) {
+        console.log('SSE: Session stopped', event);
+        // Update session state and UI
+        sessionIsLive = false;
+        updateSessionUI();
+    });
+
+    eventSource.addEventListener('question_started', function(event) {
+        console.log('SSE: Question started', event);
+        const data = JSON.parse(event.data);
+
+        // Update current question display
+        document.getElementById('current-question-id').textContent = data.question_id;
+
+        let typeDisplay = '';
+        let optionsDisplay = '';
+
+        if (data.type === 'mcq') {
+            typeDisplay = 'Multiple Choice Question';
+            optionsDisplay = 'Options: ' + data.options.join(', ');
+        } else if (data.type === 'tf') {
+            typeDisplay = 'True/False Question';
+            optionsDisplay = '';
+        } else if (data.type === 'numeric') {
+            typeDisplay = 'Numeric Question';
+            optionsDisplay = '';
+        }
+
+        document.getElementById('question-type-display').textContent = typeDisplay;
+        document.getElementById('question-options-display').textContent = optionsDisplay;
+
+        // Set stop button URL
+        const stopBtn = document.getElementById('stop-question-btn');
+        stopBtn.setAttribute(
+            'hx-post',
+            `/c/{{ course_slug }}/admin/question/${data.question_id}/stop`
+        );
+        stopBtn.dataset.questionId = data.question_id;
+        // Re-process with HTMX to recognize new attributes
+        htmx.process(stopBtn);
+
+        // Show distribution section and fetch data
+        updateDistributionOnQuestionStart();
+    });
+
+    eventSource.addEventListener('question_stopped', function(event) {
+        console.log('SSE: Question stopped', event);
+        // Hide distribution (this will show question creation buttons)
+        updateDistributionOnQuestionStop();
+
+        let data = {};
+        try {
+            data = JSON.parse(event.data);
+        } catch (err) {
+            data = {};
+        }
+
+        if (data.question_id) {
+            maybeAutoShareResults(data.question_id);
+        }
+    });
+
+    eventSource.addEventListener('counts_updated', function(event) {
+        console.log('SSE: Counts updated', event);
+        const data = JSON.parse(event.data);
+        // Fetch updated distribution
+        fetchAndUpdateDistribution();
+    });
+
+    // Distribution management
+    let currentQuestionType = null;
+
+    async function fetchAndUpdateDistribution() {
+        try {
+            const response = await fetch('/c/{{ course_slug }}/admin/distribution');
+            if (!response.ok) {
+                if (response.status === 404) {
+                    // No active question
+                    hideDistribution();
+                    return;
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            currentQuestionType = data.type;
+            displayDistribution(data);
+        } catch (error) {
+            console.error('Error fetching distribution:', error);
+            hideDistribution();
+        }
+    }
+
+    function displayDistribution(data) {
+        // Update total responses
+        document.getElementById('total-responses').textContent = data.total;
+
+        if (data.type === 'mcq' || data.type === 'tf') {
+            // Show bar chart, hide numeric list
+            document.getElementById('bar-chart-container').classList.remove('hidden');
+            document.getElementById('numeric-list-container').classList.add('hidden');
+
+            // Create/update bars
+            const container = document.getElementById('bar-chart-container');
+            container.innerHTML = ''; // Clear existing bars
+
+            // Get options in order
+            const options = data.options || (data.type === 'tf' ? ['true', 'false'] : Object.keys(data.counts));
+
+            options.forEach(option => {
+                const count = data.counts[option] || 0;
+                const percentage = data.percentages[option] || 0;
+
+                const barHTML = `
+                    <div class="bar-item">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-gray-700">${escapeHtml(option)}</span>
+                            <span class="text-sm text-gray-600">${count} (${percentage}%)</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+                            <div class="bg-blue-600 h-6 rounded-full transition-all duration-300 flex items-center justify-end pr-2"
+                                 style="width: ${percentage}%">
+                                ${percentage > 10 ? `<span class="text-xs text-white font-medium">${percentage}%</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += barHTML;
+            });
+        } else if (data.type === 'numeric') {
+            // Show numeric list, hide bar chart
+            document.getElementById('bar-chart-container').classList.add('hidden');
+            document.getElementById('numeric-list-container').classList.remove('hidden');
+
+            // Create/update numeric list
+            const container = document.getElementById('numeric-list');
+            container.innerHTML = ''; // Clear existing items
+
+            // Sort by count (descending)
+            const sorted = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
+
+            sorted.forEach(([value, count]) => {
+                const percentage = data.percentages[value] || 0;
+
+                const itemHTML = `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <span class="font-medium text-gray-900">${escapeHtml(value)}</span>
+                        <span class="text-sm text-gray-600">${count} (${percentage.toFixed(2)}%)</span>
+                    </div>
+                `;
+                container.innerHTML += itemHTML;
+            });
+
+            if (sorted.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No responses yet</p>';
+            }
+        }
+    }
+
+    function hideDistribution() {
+        // Hide distribution section, show question creation buttons
+        document.getElementById('distribution-section').classList.add('hidden');
+        document.getElementById('question-controls').classList.remove('hidden');
+        currentQuestionType = null;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Update distribution display when question starts
+    function updateDistributionOnQuestionStart() {
+        // Show distribution section immediately
+        document.getElementById('question-controls').classList.add('hidden');
+        document.getElementById('distribution-section').classList.remove('hidden');
+
+        // Then fetch the data to populate it
+        setTimeout(fetchAndUpdateDistribution, 100);
+    }
+
+    // Hide distribution when question stops
+    function updateDistributionOnQuestionStop() {
+        hideDistribution();
+    }
+
+    function maybeAutoShareResults(questionId) {
+        if (!autoShareResults || !questionId) {
+            return;
+        }
+
+        if (autoShareInFlight.has(questionId)) {
+            return;
+        }
+
+        autoShareInFlight.add(questionId);
+
+        fetch(`/c/{{ course_slug }}/admin/question/${questionId}/share-results`, {
+            method: 'POST',
+        })
+            .then(async (response) => {
+                try {
+                    await response.json();
+                } catch (err) {
+                    // Ignore JSON parsing issues for responses without JSON bodies
+                }
+
+                if (!response.ok) {
+                    console.warn('Auto-share failed for question', questionId, response.status);
+                }
+            })
+            .catch((error) => {
+                console.error('Auto-share error:', error);
+            })
+            .finally(() => {
+                autoShareInFlight.delete(questionId);
+            });
+    }
+
+    // Update existing question stopped handlers
+    function handleQuestionStopped(event) {
+        if (event.detail.successful) {
+            // Hide distribution (this will show question creation buttons)
+            updateDistributionOnQuestionStop();
+        }
+    }
+
+    // Student Questions Management
+    async function fetchAndDisplayQuestions() {
+        try {
+            const response = await fetch('/c/{{ course_slug }}/admin/questions');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const questions = await response.json();
+            displayQuestions(questions);
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+        }
+    }
+
+    function displayQuestions(questions) {
+        const emptyState = document.getElementById('questions-empty-state');
+        const questionsList = document.getElementById('questions-list');
+        const badge = document.getElementById('question-count-badge');
+
+        if (questions.length === 0) {
+            // Show empty state
+            emptyState.classList.remove('hidden');
+            questionsList.classList.add('hidden');
+            badge.classList.add('hidden');
+        } else {
+            // Hide empty state, show list
+            emptyState.classList.add('hidden');
+            questionsList.classList.remove('hidden');
+            badge.classList.remove('hidden');
+
+            // Update badge
+            badge.textContent = `${questions.length} question${questions.length !== 1 ? 's' : ''}`;
+
+            // Clear existing questions
+            questionsList.innerHTML = '';
+
+            // Add each question
+            questions.forEach((q, index) => {
+                const questionHTML = `
+                    <div class="question-card p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition" data-question-id="${q.question_id}">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-xs font-medium text-gray-500">#${questions.length - index}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500">${formatTimestamp(q.timestamp)}</span>
+                                <button
+                                    class="dismiss-btn p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                    onclick="dismissQuestion('${q.question_id}')"
+                                    title="Dismiss question">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-900 leading-relaxed">${escapeHtml(q.question)}</p>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="text-xs text-gray-500">
+                                <svg class="inline w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                                </svg>
+                                ${q.pid}
+                            </span>
+                        </div>
+                    </div>
+                `;
+                questionsList.innerHTML += questionHTML;
+            });
+        }
+    }
+
+    function formatTimestamp(isoString) {
+        if (!isoString) return '';
+        try {
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return date.toLocaleDateString();
+        } catch (e) {
+            return isoString;
+        }
+    }
+
+    // Fetch questions when session starts
+    function onSessionStarted() {
+        fetchAndDisplayQuestions();
+    }
+
+    // Listen for new_question events via SSE
+    eventSource.addEventListener('new_question', function(event) {
+        console.log('SSE: New question received', event);
+        // Refresh the questions list
+        fetchAndDisplayQuestions();
+    });
+
+    // Dismiss a question
+    async function dismissQuestion(questionId) {
+        try {
+            const response = await fetch(`/c/{{ course_slug }}/admin/questions/${questionId}`, {
+                method: 'DELETE',
+            });
+
+            if (response.ok) {
+                // Remove the question card from UI with animation
+                const card = document.querySelector(`[data-question-id="${questionId}"]`);
+                if (card) {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(20px)';
+                    setTimeout(() => {
+                        card.remove();
+                        // Refresh to update count and check if empty
+                        fetchAndDisplayQuestions();
+                    }, 300);
+                }
+            } else {
+                console.error('Failed to dismiss question:', response.status);
+                alert('Failed to dismiss question. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error dismissing question:', error);
+            alert('Failed to dismiss question. Please try again.');
+        }
+    }
+</script>
+{% endblock %}

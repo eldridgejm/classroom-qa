@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Archived Sessions - {{ course_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <header class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ course_name }}</h1>
+                <p class="text-gray-600 mt-1">Archived Sessions</p>
+            </div>
+            <a
+                href="/c/{{ course_slug }}/admin"
+                class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                Back to Dashboard
+            </a>
+        </div>
+    </header>
+
+    {% if session_is_live %}
+    <div class="mb-8 border border-yellow-200 bg-yellow-50 rounded-lg p-4" id="live-session-banner">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+                <p class="text-sm font-semibold text-yellow-900">Live session in progress</p>
+                <p class="text-xs text-yellow-800">Stop the current session to archive it and download the data.</p>
+            </div>
+            <div class="inline-flex flex-col items-start gap-2 md:items-end">
+                <button
+                    id="stop-session-btn"
+                    type="button"
+                    class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 disabled:opacity-50"
+                    onclick="stopSessionFromArchives()">
+                    Stop session now
+                </button>
+                <p id="stop-session-error" class="hidden text-xs text-red-700"></p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if archives %}
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900">Recent Sessions</h2>
+            <p class="text-sm text-gray-600 mt-1">Sessions are kept for 30 minutes after they end</p>
+        </div>
+
+        <div class="divide-y divide-gray-200">
+            {% for archive in archives %}
+            <div class="px-6 py-4 hover:bg-gray-50 transition">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <h3 class="text-lg font-medium text-gray-900">
+                                Session {{ archives|length - loop.index + 1 }}
+                            </h3>
+                            <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                                {{ archive.question_count }} question{% if archive.question_count != 1 %}s{% endif %}
+                            </span>
+                        </div>
+
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                            {% if archive.started_at %}
+                            <div>
+                                <dt class="inline text-gray-500">Started:</dt>
+                                <dd class="inline text-gray-900 ml-1">
+                                    <time datetime="{{ archive.started_at }}">
+                                        {{ archive.started_at | format_timestamp }}
+                                    </time>
+                                </dd>
+                            </div>
+                            {% endif %}
+
+                            {% if archive.stopped_at %}
+                            <div>
+                                <dt class="inline text-gray-500">Stopped:</dt>
+                                <dd class="inline text-gray-900 ml-1">
+                                    <time datetime="{{ archive.stopped_at }}">
+                                        {{ archive.stopped_at | format_timestamp }}
+                                    </time>
+                                </dd>
+                            </div>
+                            {% endif %}
+                        </dl>
+
+                        <div class="mt-2">
+                            <p class="text-xs text-gray-500 font-mono">
+                                ID: {{ archive.session_id }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="ml-4">
+                        <a
+                            href="/c/{{ course_slug }}/admin/archives/{{ archive.session_id }}"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition"
+                            download="session-{{ archive.session_id }}.json">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-12 text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+            <h3 class="mt-2 text-lg font-medium text-gray-900">No archived sessions</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Archived sessions will appear here after you stop a session.
+            </p>
+            <div class="mt-6">
+                <a
+                    href="/c/{{ course_slug }}/admin"
+                    class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Go to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if archives %}
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-blue-700">
+                    <strong>Note:</strong> Archived sessions are automatically deleted 30 minutes after the session ends. Download them if you need to keep the data longer.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if session_is_live %}
+<script>
+    async function stopSessionFromArchives() {
+        const button = document.getElementById('stop-session-btn');
+        const errorEl = document.getElementById('stop-session-error');
+        if (!button) {
+            return;
+        }
+
+        if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+        }
+
+        button.disabled = true;
+
+        try {
+            const response = await fetch('/c/{{ course_slug }}/admin/session/stop', {
+                method: 'POST',
+                headers: {
+                    'HX-Request': 'true'
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to stop session.');
+            }
+
+            // Reload the current page to show the newly archived session
+            window.location.reload();
+        } catch (error) {
+            button.disabled = false;
+            if (errorEl) {
+                errorEl.textContent = error.message || 'Failed to stop session. Please try again.';
+                errorEl.classList.remove('hidden');
+            } else {
+                alert(error.message || 'Failed to stop session. Please try again.');
+            }
+        }
+    }
+</script>
+{% endif %}
+{% endblock %}
