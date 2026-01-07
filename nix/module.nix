@@ -172,10 +172,13 @@ in {
         ReadOnlyPaths = cfg.coursesFile;
       };
 
-      # Set SECRET_KEY from credential file
-      script = ''
+      # Set SECRET_KEY from credential file and run uvicorn
+      script = let
+        python = cfg.package.pythonModule or pkgs.python311;
+      in ''
         export SECRET_KEY=$(cat ${"\${CREDENTIALS_DIRECTORY}"}/secret-key)
-        exec ${cfg.package}/bin/uvicorn app.main:app \
+        export PYTHONPATH="${cfg.package}/${python.sitePackages}:$PYTHONPATH"
+        exec ${python}/bin/python -m uvicorn app.main:app \
           --host ${cfg.host} \
           --port ${toString cfg.port} \
           ${lib.optionalString (cfg.rootPath != "") "--root-path ${cfg.rootPath}"}
