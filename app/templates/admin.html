@@ -22,7 +22,7 @@
                     <button
                         id="session-toggle-btn"
                         class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        hx-post="/c/{{ course_slug }}/admin/session/start"
+                        hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/admin/session/start"
                         hx-swap="none"
                         hx-on::after-request="handleSessionToggle(event)">
                         Start Session
@@ -48,7 +48,7 @@
                     <div id="question-buttons" class="flex flex-col gap-2">
                         <button
                             class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/admin/question"
                             hx-vals='{"type": "mcq", "options": ["A", "B", "C", "D"]}'
                             hx-swap="none"
                             hx-on::after-request="handleQuestionCreated(event)"
@@ -57,7 +57,7 @@
                         </button>
                         <button
                             class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/admin/question"
                             hx-vals='{"type": "tf"}'
                             hx-swap="none"
                             hx-on::after-request="handleQuestionCreated(event)"
@@ -66,7 +66,7 @@
                         </button>
                         <button
                             class="question-create-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            hx-post="/c/{{ course_slug }}/admin/question"
+                            hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/admin/question"
                             hx-vals='{"type": "numeric"}'
                             hx-swap="none"
                             hx-on::after-request="handleQuestionCreated(event)"
@@ -320,7 +320,7 @@
     }
 
     // SSE Connection using native EventSource API
-    const eventSource = new EventSource('/sse/admin/{{ course_slug }}');
+    const eventSource = new EventSource(`${rootPath}/sse/admin/{{ course_slug }}`);
 
     eventSource.addEventListener('session_started', function(event) {
         console.log('SSE: Session started', event);
