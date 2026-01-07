@@ -16,7 +16,11 @@ from app.redis_client import RedisClient
 from app.services.distribution import build_distribution
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+
+# Get template directory - works both in dev and when packaged
+import pathlib
+template_dir = pathlib.Path(__file__).parent.parent / "templates"
+templates = Jinja2Templates(directory=str(template_dir))
 
 
 # Dependency to get Redis client
