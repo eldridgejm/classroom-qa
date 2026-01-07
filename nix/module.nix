@@ -12,9 +12,9 @@ in {
 
     package = mkOption {
       type = types.package;
+      default = pkgs.callPackage ./package.nix {};
+      defaultText = lib.literalExpression "pkgs.callPackage ./package.nix {}";
       description = "The classroom-qa package to use";
-      default = pkgs.callPackage ../nix/package.nix {};
-      defaultText = lib.literalExpression "pkgs.callPackage ./nix/package.nix {}";
     };
 
     host = mkOption {
@@ -173,12 +173,9 @@ in {
       };
 
       # Set SECRET_KEY from credential file and run uvicorn
-      script = let
-        python = cfg.package.pythonModule or pkgs.python311;
-      in ''
+      script = ''
         export SECRET_KEY=$(cat ${"\${CREDENTIALS_DIRECTORY}"}/secret-key)
-        export PYTHONPATH="${cfg.package}/${python.sitePackages}:$PYTHONPATH"
-        exec ${python}/bin/python -m uvicorn app.main:app \
+        exec ${cfg.package}/bin/classroom-qa-server \
           --host ${cfg.host} \
           --port ${toString cfg.port} \
           ${lib.optionalString (cfg.rootPath != "") "--root-path ${cfg.rootPath}"}
