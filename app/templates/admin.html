@@ -213,7 +213,7 @@
             toggleBtn.textContent = 'Stop Session';
             toggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
             toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-            toggleBtn.setAttribute('hx-post', '/c/{{ course_slug }}/admin/session/stop');
+            toggleBtn.setAttribute('hx-post', `${rootPath}/c/{{ course_slug }}/admin/session/stop`);
             htmx.process(toggleBtn);
 
             statusText.textContent = 'Live';
@@ -231,7 +231,7 @@
             toggleBtn.textContent = 'Start Session';
             toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
             toggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            toggleBtn.setAttribute('hx-post', '/c/{{ course_slug }}/admin/session/start');
+            toggleBtn.setAttribute('hx-post', `${rootPath}/c/{{ course_slug }}/admin/session/start`);
             htmx.process(toggleBtn);
 
             statusText.textContent = 'Stopped';
@@ -283,7 +283,7 @@
             const stopBtn = document.getElementById('stop-question-btn');
             stopBtn.setAttribute(
                 'hx-post',
-                `/c/{{ course_slug }}/admin/question/${questionId}/stop`
+                `${rootPath}/c/{{ course_slug }}/admin/question/${questionId}/stop`
             );
             stopBtn.dataset.questionId = questionId;
             // Re-process with HTMX to recognize new attributes
@@ -366,7 +366,7 @@
         const stopBtn = document.getElementById('stop-question-btn');
         stopBtn.setAttribute(
             'hx-post',
-            `/c/{{ course_slug }}/admin/question/${data.question_id}/stop`
+            `${rootPath}/c/{{ course_slug }}/admin/question/${data.question_id}/stop`
         );
         stopBtn.dataset.questionId = data.question_id;
         // Re-process with HTMX to recognize new attributes
@@ -548,14 +548,6 @@
             .finally(() => {
                 autoShareInFlight.delete(questionId);
             });
-    }
-
-    // Update existing question stopped handlers
-    function handleQuestionStopped(event) {
-        if (event.detail.successful) {
-            // Hide distribution (this will show question creation buttons)
-            updateDistributionOnQuestionStop();
-        }
     }
 
     // Student Questions Management
