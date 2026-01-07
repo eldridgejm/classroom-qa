@@ -405,7 +405,7 @@
 
     async function fetchAndUpdateDistribution() {
         try {
-            const response = await fetch(`${rootPath}/c/{{ course_slug }}/admin/distribution');
+            const response = await fetch(`${rootPath}/c/{{ course_slug }}/admin/distribution`);
             if (!response.ok) {
                 if (response.status === 404) {
                     // No active question
