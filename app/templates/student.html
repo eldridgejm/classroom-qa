@@ -742,6 +742,54 @@
         }
     });
 
+    // Initialize with current question if one is active (for page refresh)
+    {% if current_question %}
+    (function() {
+        console.log('Initializing with current question from server');
+        const questionData = {
+            id: '{{ current_question.id }}',
+            type: '{{ current_question.type }}',
+            options: {{ current_question.options | tojson if current_question.options else 'null' }}
+        };
+        const studentAnswer = {{ student_answer | tojson if student_answer is not none else 'null' }};
+
+        // Show the question
+        showQuestion(questionData.id, questionData.type, questionData.options);
+
+        // Restore student's previous answer if any
+        if (studentAnswer !== null) {
+            console.log('Restoring student answer:', studentAnswer);
+            // Highlight the previously selected answer based on question type
+            if (questionData.type === 'mcq') {
+                // Wait for DOM to update after showQuestion
+                setTimeout(() => {
+                    document.querySelectorAll('.mcq-option').forEach(btn => {
+                        if (btn.dataset.value === studentAnswer) {
+                            btn.classList.add('answer-selected');
+                        }
+                    });
+                }, 50);
+            } else if (questionData.type === 'tf') {
+                setTimeout(() => {
+                    document.querySelectorAll('.tf-option').forEach(btn => {
+                        if (btn.dataset.value === studentAnswer.toString()) {
+                            btn.classList.add('answer-selected');
+                        }
+                    });
+                }, 50);
+            } else if (questionData.type === 'numeric') {
+                // For numeric, just fill in the input field
+                setTimeout(() => {
+                    const input = document.getElementById('numeric-answer');
+                    if (input) {
+                        input.value = studentAnswer;
+                    }
+                }, 50);
+            }
+        }
+    })();
+    {% endif %}
+
     // For testing/demo: Simulate receiving a question
     // Uncomment the line below to test without SSE:
     // showQuestion('q-demo-123', 'mcq', ['A', 'B', 'C', 'D']);
