@@ -143,7 +143,7 @@ async def enter_pid(
             context={
                 "course_name": course_config.name,
                 "course_slug": course,
-                "error": "Invalid PID format. Must be A followed by 8 digits (e.g., A12345678)",
+                "error": "Invalid PID format. Must be A or U followed by 8 digits (e.g., A12345678 or U12345678)",
             },
             status_code=400,
         )
@@ -372,8 +372,8 @@ class RateLimitResponse(BaseModel):
 def strip_pids_from_text(text: str) -> str:
     """Strip PIDs from text and replace with [PID]"""
     import re
-    # Match UCSD PID format: A followed by 8 digits
-    pattern = r'\bA\d{8}\b'
+    # Match UCSD PID format: A or U followed by 8 digits
+    pattern = r'\b[AU]\d{8}\b'
     return re.sub(pattern, '[PID]', text)
 
 

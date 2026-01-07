@@ -47,13 +47,33 @@ class TestPIDValidation:
         """Test that PID with all nines is valid"""
         assert validate_pid_format("A99999999") is True
 
+    def test_valid_pid_u_prefix(self) -> None:
+        """Test that valid PID format with U prefix is accepted"""
+        assert validate_pid_format("U12345678") is True
+
+    def test_valid_pid_u_all_zeros(self) -> None:
+        """Test that PID with U prefix and all zeros is valid"""
+        assert validate_pid_format("U00000000") is True
+
+    def test_valid_pid_u_all_nines(self) -> None:
+        """Test that PID with U prefix and all nines is valid"""
+        assert validate_pid_format("U99999999") is True
+
     def test_invalid_pid_lowercase_a(self) -> None:
         """Test that lowercase 'a' is invalid"""
         assert validate_pid_format("a12345678") is False
 
-    def test_invalid_pid_no_a(self) -> None:
-        """Test that PID without 'A' is invalid"""
+    def test_invalid_pid_lowercase_u(self) -> None:
+        """Test that lowercase 'u' is invalid"""
+        assert validate_pid_format("u12345678") is False
+
+    def test_invalid_pid_no_prefix(self) -> None:
+        """Test that PID without 'A' or 'U' prefix is invalid"""
         assert validate_pid_format("12345678") is False
+
+    def test_invalid_pid_wrong_prefix(self) -> None:
+        """Test that PID with wrong prefix is invalid"""
+        assert validate_pid_format("B12345678") is False
 
     def test_invalid_pid_too_short(self) -> None:
         """Test that PID with fewer than 8 digits is invalid"""

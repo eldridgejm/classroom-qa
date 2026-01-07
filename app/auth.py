@@ -11,13 +11,13 @@ from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 
 from app.config import Settings
 
-# PID format validation (UCSD: A########)
-PID_PATTERN = re.compile(r"^A\d{8}$")
+# PID format validation (UCSD: A######## or U########)
+PID_PATTERN = re.compile(r"^[AU]\d{8}$")
 
 
 def validate_pid_format(pid: str) -> bool:
     """
-    Validate PID format (A followed by 8 digits)
+    Validate PID format (A or U followed by 8 digits)
 
     Args:
         pid: Student PID to validate
