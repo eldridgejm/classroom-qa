@@ -94,6 +94,27 @@ async def student_page(request: Request, course: str) -> Response:
         redis_conn = redis.from_url(app.config.settings.redis_url, decode_responses=True)
         redis_wrapper = RedisClient(redis_conn)
         session_is_live = redis_wrapper.is_session_live(course)
+
+        # Check if there's a current question
+        current_question = None
+        student_answer = None
+
+        if session_is_live:
+            current_qid = redis_wrapper.get_current_question(course)
+            if current_qid:
+                question_meta = redis_wrapper.get_question_meta(course, current_qid)
+                # Only show the question if it hasn't ended yet
+                if question_meta and question_meta.get("ended_at") is None:
+                    current_question = {
+                        "id": current_qid,
+                        "type": question_meta["type"],
+                        "options": question_meta.get("options"),
+                    }
+                    # Get student's previous answer if any
+                    response = redis_wrapper.get_response(course, current_qid, pid)
+                    if response:
+                        student_answer = response.get("resp")
+
         redis_conn.close()
 
         # Show main student page
@@ -105,6 +126,8 @@ async def student_page(request: Request, course: str) -> Response:
                 "course_slug": course,
                 "pid": pid,
                 "session_is_live": session_is_live,
+                "current_question": current_question,
+                "student_answer": student_answer,
             },
         )
     else:
