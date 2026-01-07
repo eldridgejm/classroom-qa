@@ -120,7 +120,7 @@ in {
       after = ["network.target"];
 
       serviceConfig = {
-        Type = "notify";
+        Type = "simple";
         ExecStart = "${pkgs.redis}/bin/redis-server --port ${toString cfg.redisPort} --dir ${cfg.stateDir}/redis --save \"\" --appendonly no";
         User = cfg.user;
         Group = cfg.group;
