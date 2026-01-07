@@ -13,6 +13,8 @@ in {
     package = mkOption {
       type = types.package;
       description = "The classroom-qa package to use";
+      default = pkgs.callPackage ../nix/package.nix {};
+      defaultText = lib.literalExpression "pkgs.callPackage ./nix/package.nix {}";
     };
 
     host = mkOption {
