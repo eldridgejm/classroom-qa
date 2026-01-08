@@ -74,7 +74,7 @@ Each response contains:
 - `timestamp`: ISO 8601 timestamp when the response was submitted
 - `response`: The student's answer (string for MCQ, boolean for TF, number for numeric)
 
-Sessions are automatically archived when stopped and are retained based on the configured TTL (default: 30 minutes). Instructors can download archived sessions as JSON files from the admin interface.
+Sessions are automatically archived when stopped and are retained based on the configured TTL (default: 24 hours). Instructors can download archived sessions as JSON files from the admin interface.
 
 ## Requirements
 
@@ -142,7 +142,7 @@ RATE_LIMIT_WINDOW=10      # Window in seconds
 MAX_QUESTION_LENGTH=1000  # Max question length
 
 # Session management
-SESSION_TTL=1800          # TTL in seconds (30 min)
+SESSION_TTL=86400         # TTL in seconds (24 hours)
 
 # Courses file path (default: courses.toml)
 COURSES_FILE=courses.toml
@@ -278,7 +278,7 @@ uv run mypy app
 | `RATE_LIMIT_ASK` | `1` | Questions allowed per window |
 | `RATE_LIMIT_WINDOW` | `10` | Rate limit window (seconds) |
 | `MAX_QUESTION_LENGTH` | `1000` | Max student question length |
-| `SESSION_TTL` | `1800` | Session TTL after end (seconds) |
+| `SESSION_TTL` | `86400` | Session TTL after end (seconds) |
 | `COURSES_FILE` | `courses.toml` | Path to courses configuration |
 
 ### courses.toml Format
@@ -318,7 +318,7 @@ The application includes a NixOS module for production deployment with bundled R
             rateLimitAsk = 1;
             rateLimitWindow = 10;
             maxQuestionLength = 1000;
-            sessionTTL = 1800;
+            sessionTTL = 86400;
           };
         }
       ];
@@ -399,7 +399,7 @@ journalctl -u classroom-qa-redis -f
 | `rateLimitAsk` | int | `1` | Questions per window |
 | `rateLimitWindow` | int | `10` | Window in seconds |
 | `maxQuestionLength` | int | `1000` | Max question length |
-| `sessionTTL` | int | `1800` | Session TTL (seconds) |
+| `sessionTTL` | int | `86400` | Session TTL (seconds) |
 
 ## Architecture
 

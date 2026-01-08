@@ -206,7 +206,7 @@ class TestEnvironmentVariables:
         assert settings.rate_limit_ask == 1
         assert settings.rate_limit_window == 10
         assert settings.max_question_length == 1000
-        assert settings.session_ttl == 1800
+        assert settings.session_ttl == 86400
         assert settings.courses_file == "courses.toml"
 
     def test_custom_values(self) -> None:

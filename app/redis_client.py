@@ -149,14 +149,14 @@ class RedisClient:
 
         Args:
             course: Course slug
-            ttl: Optional TTL in seconds for archived session (default: 1800 = 30 min)
+            ttl: Optional TTL in seconds for archived session (default: 86400 = 24 hours)
 
         Returns:
             Session ID of archived session
         """
-        # Default TTL to 30 minutes if not specified
+        # Default TTL to 24 hours if not specified
         if ttl is None:
-            ttl = 1800
+            ttl = 86400
 
         # Archive current session
         session_id = self.archive_session(course, ttl)
@@ -523,13 +523,13 @@ class RedisClient:
 
     # Archive operations
 
-    def archive_session(self, course: str, ttl: int = 1800) -> str:
+    def archive_session(self, course: str, ttl: int = 86400) -> str:
         """
         Archive current session data
 
         Args:
             course: Course slug
-            ttl: TTL in seconds for archived session (default: 1800 = 30 min)
+            ttl: TTL in seconds for archived session (default: 86400 = 24 hours)
 
         Returns:
             Session ID of archived session

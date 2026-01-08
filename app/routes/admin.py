@@ -244,8 +244,8 @@ async def stop_session(
     if course_config is None:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Stop session in Redis with 30 minute TTL
-    redis_client.stop_session(course, ttl=1800)
+    # Stop session in Redis with 24 hour TTL
+    redis_client.stop_session(course, ttl=86400)
 
     # Publish SSE event
     redis_client.publish_event(course, EventType.SESSION_STOPPED, {})

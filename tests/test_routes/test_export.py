@@ -395,7 +395,7 @@ class TestSessionTTL:
         assert len(archives) == 1
         session_id = archives[0]["session_id"]
         archive_key = redis_client_wrapper.archive_key("test-course", session_id)
-        assert 1790 < redis_client.ttl(archive_key) <= 1800
+        assert 86390 < redis_client.ttl(archive_key) <= 86400
 
     def test_export_available_after_session_stop(
         self, client: TestClient, test_settings: Settings, redis_client

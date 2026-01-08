@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Session management
     session_ttl: int = Field(
-        default=1800, description="Session data TTL after end (seconds)"
+        default=86400, description="Session data TTL after end (seconds)"
     )
 
     # Courses file path

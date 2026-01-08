@@ -92,8 +92,8 @@ in {
 
     sessionTTL = mkOption {
       type = types.int;
-      default = 1800;
-      description = "Session data TTL in seconds (30 minutes)";
+      default = 86400;
+      description = "Session data TTL in seconds (24 hours)";
     };
   };
 
