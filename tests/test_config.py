@@ -247,12 +247,9 @@ class TestEnvironmentVariables:
 
         assert settings.redis_url == "redis://localhost:6379"
         assert settings.secret_key == "dev-secret-key-change-in-production"
-        assert settings.llm_provider == "openai"
-        assert settings.llm_api_key == ""
         assert settings.rate_limit_ask == 1
         assert settings.rate_limit_window == 10
         assert settings.max_question_length == 1000
-        assert settings.escalation_threshold == 3
         assert settings.session_ttl == 1800
         assert settings.courses_file == "courses.toml"
 
@@ -261,24 +258,18 @@ class TestEnvironmentVariables:
         settings = Settings(
             redis_url="redis://custom:6379",
             secret_key="custom-secret",
-            llm_provider="anthropic",
-            llm_api_key="custom-api-key",
             rate_limit_ask=5,
             rate_limit_window=60,
             max_question_length=500,
-            escalation_threshold=5,
             session_ttl=3600,
             courses_file="custom.toml",
         )
 
         assert settings.redis_url == "redis://custom:6379"
         assert settings.secret_key == "custom-secret"
-        assert settings.llm_provider == "anthropic"
-        assert settings.llm_api_key == "custom-api-key"
         assert settings.rate_limit_ask == 5
         assert settings.rate_limit_window == 60
         assert settings.max_question_length == 500
-        assert settings.escalation_threshold == 5
         assert settings.session_ttl == 3600
         assert settings.courses_file == "custom.toml"
 
@@ -286,14 +277,6 @@ class TestEnvironmentVariables:
         """Test Redis URL configuration"""
         settings = Settings(redis_url="redis://prod-server:6380/2")
         assert settings.redis_url == "redis://prod-server:6380/2"
-
-    def test_llm_provider_options(self) -> None:
-        """Test different LLM provider options"""
-        openai_settings = Settings(llm_provider="openai")
-        assert openai_settings.llm_provider == "openai"
-
-        anthropic_settings = Settings(llm_provider="anthropic")
-        assert anthropic_settings.llm_provider == "anthropic"
 
     def test_rate_limiting_configuration(self) -> None:
         """Test rate limiting configuration"""

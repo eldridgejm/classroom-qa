@@ -81,5 +81,4 @@ def test_settings_have_defaults(test_settings: Settings) -> None:
     assert test_settings.rate_limit_ask == 1
     assert test_settings.rate_limit_window == 10
     assert test_settings.max_question_length == 1000
-    assert test_settings.escalation_threshold == 3
     assert test_settings.session_ttl == 1800

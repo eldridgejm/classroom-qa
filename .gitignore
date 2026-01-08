@@ -4,6 +4,7 @@
 ### Project ###
 
 .claude/settings.local.json
+worktrees/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

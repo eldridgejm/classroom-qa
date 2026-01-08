@@ -43,20 +43,11 @@ class Settings(BaseSettings):
         description="Secret key for HMAC cookie signing",
     )
 
-    # LLM configuration
-    llm_provider: str = Field(default="openai", description="LLM provider (openai, anthropic)")
-    llm_api_key: str = Field(default="", description="API key for LLM provider")
-
     # Rate limiting
     rate_limit_ask: int = Field(default=1, description="Questions allowed per window")
     rate_limit_window: int = Field(default=10, description="Rate limit window in seconds")
     max_question_length: int = Field(
         default=1000, description="Maximum student question length"
-    )
-
-    # Escalation
-    escalation_threshold: int = Field(
-        default=3, description="Number of similar questions to trigger escalation"
     )
 
     # Session management

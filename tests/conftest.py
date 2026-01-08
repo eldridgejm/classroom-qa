@@ -64,8 +64,6 @@ created_at = "2025-11-11T00:00:00Z"
         redis_url=redis_server,
         secret_key="test-secret-key-for-hmac",
         courses_file=str(courses_file),
-        llm_provider="mock",
-        llm_api_key="mock-api-key",
     )
 
     return test_settings

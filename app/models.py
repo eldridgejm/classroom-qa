@@ -56,7 +56,6 @@ class EventType(str, Enum):
     QUESTION_STOPPED = "question_stopped"
     COUNTS_UPDATED = "counts_updated"
     NEW_QUESTION = "new_question"  # Student asked a question
-    ESCALATION = "escalation"
     RESULTS_PUBLISHED = "results_published"
 
 
@@ -79,10 +78,3 @@ class CountsUpdatedEvent(BaseModel):
 
     question_id: str
     counts: dict[str, int]
-
-
-class EscalationEvent(BaseModel):
-    """Event when student questions are escalated"""
-
-    summary: str
-    count: int

@@ -90,12 +90,6 @@ in {
       description = "Maximum length of student questions";
     };
 
-    escalationThreshold = mkOption {
-      type = types.int;
-      default = 3;
-      description = "Number of similar questions to trigger escalation";
-    };
-
     sessionTTL = mkOption {
       type = types.int;
       default = 1800;
@@ -150,7 +144,6 @@ in {
         RATE_LIMIT_ASK = toString cfg.rateLimitAsk;
         RATE_LIMIT_WINDOW = toString cfg.rateLimitWindow;
         MAX_QUESTION_LENGTH = toString cfg.maxQuestionLength;
-        ESCALATION_THRESHOLD = toString cfg.escalationThreshold;
         SESSION_TTL = toString cfg.sessionTTL;
       };
 
