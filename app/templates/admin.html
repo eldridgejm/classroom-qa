@@ -198,8 +198,14 @@
 
     function handleSessionToggle(event) {
         if (event.detail.successful) {
-            // Toggle the session state
-            sessionIsLive = !sessionIsLive;
+            // Determine new state from the endpoint that was called
+            // rather than toggling, to avoid race conditions with SSE
+            const url = event.detail.requestConfig.path;
+            if (url.includes('/session/start')) {
+                sessionIsLive = true;
+            } else if (url.includes('/session/stop')) {
+                sessionIsLive = false;
+            }
             updateSessionUI();
         }
     }
