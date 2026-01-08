@@ -53,7 +53,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -105,7 +105,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -142,7 +142,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -192,7 +192,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -227,7 +227,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -251,7 +251,7 @@ class TestExportEndpoint:
 
         # Export without starting session
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -261,7 +261,7 @@ class TestExportEndpoint:
 
     def test_export_unauthorized(self, client: TestClient) -> None:
         """Test export requires admin auth"""
-        response = client.get("/c/test-course/admin/export")
+        response = client.get("/test-course/admin/export")
 
         assert response.status_code == 403
 
@@ -270,7 +270,7 @@ class TestExportEndpoint:
     ) -> None:
         """Test export for non-existent course"""
         response = client.get(
-            "/c/nonexistent-course/admin/export",
+            "/nonexistent-course/admin/export",
             cookies={"admin_session": "some-cookie"},
         )
 
@@ -311,7 +311,7 @@ class TestExportEndpoint:
 
         # Export
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -377,7 +377,7 @@ class TestSessionTTL:
 
         # Stop session
         response = client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -421,13 +421,13 @@ class TestSessionTTL:
 
         # Stop session
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
         # Current session export should be empty
         response = client.get(
-            "/c/test-course/admin/export",
+            "/test-course/admin/export",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -442,7 +442,7 @@ class TestSessionTTL:
 
         # Download archived session
         response = client.get(
-            f"/c/test-course/admin/archives/{session_id}",
+            f"/test-course/admin/archives/{session_id}",
             cookies={"admin_session": admin_cookie},
         )
 

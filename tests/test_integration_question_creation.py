@@ -42,14 +42,14 @@ def test_question_creation_with_json_body(client, redis_client, admin_cookie):
 
     # Start session first
     response = client.post(
-        f"/c/{course}/admin/session/start",
+        f"/{course}/admin/session/start",
         cookies={"admin_session": admin_cookie},
     )
     assert response.status_code == 200
 
     # Create MCQ question with proper JSON body
     response = client.post(
-        f"/c/{course}/admin/question",
+        f"/{course}/admin/question",
         json={"type": "mcq", "options": ["A", "B", "C", "D"]},
         cookies={"admin_session": admin_cookie},
     )
@@ -68,7 +68,7 @@ def test_question_creation_with_form_data(client, redis_client, admin_cookie):
 
     # Start session first
     response = client.post(
-        f"/c/{course}/admin/session/start",
+        f"/{course}/admin/session/start",
         cookies={"admin_session": admin_cookie},
     )
     assert response.status_code == 200
@@ -76,7 +76,7 @@ def test_question_creation_with_form_data(client, redis_client, admin_cookie):
     # Create MCQ question with form data (simulating HTMX hx-vals)
     # This now works after the fix!
     response = client.post(
-        f"/c/{course}/admin/question",
+        f"/{course}/admin/question",
         data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         cookies={"admin_session": admin_cookie},
     )
@@ -94,14 +94,14 @@ def test_question_creation_tf_with_form_data(client, redis_client, admin_cookie)
 
     # Start session
     response = client.post(
-        f"/c/{course}/admin/session/start",
+        f"/{course}/admin/session/start",
         cookies={"admin_session": admin_cookie},
     )
     assert response.status_code == 200
 
     # Create T/F question with form data
     response = client.post(
-        f"/c/{course}/admin/question",
+        f"/{course}/admin/question",
         data={"type": "tf"},
         cookies={"admin_session": admin_cookie},
     )
@@ -117,14 +117,14 @@ def test_question_creation_numeric_with_form_data(client, redis_client, admin_co
 
     # Start session
     response = client.post(
-        f"/c/{course}/admin/session/start",
+        f"/{course}/admin/session/start",
         cookies={"admin_session": admin_cookie},
     )
     assert response.status_code == 200
 
     # Create numeric question with form data
     response = client.post(
-        f"/c/{course}/admin/question",
+        f"/{course}/admin/question",
         data={"type": "numeric"},
         cookies={"admin_session": admin_cookie},
     )

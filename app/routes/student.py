@@ -74,7 +74,7 @@ class QuestionResultsResponse(BaseModel):
     your_answer: str | bool | float | None = None
 
 
-@router.get("/c/{course}", response_class=HTMLResponse)
+@router.get("/{course}", response_class=HTMLResponse)
 async def student_page(request: Request, course: str) -> Response:
     """
     Student page - shows PID entry if not authenticated, main page if authenticated
@@ -143,7 +143,7 @@ async def student_page(request: Request, course: str) -> Response:
         )
 
 
-@router.post("/c/{course}/enter-pid")
+@router.post("/{course}/enter-pid")
 async def enter_pid(
     request: Request,
     course: str,
@@ -177,7 +177,7 @@ async def enter_pid(
     # Redirect to student page (include root_path for subpath deployments)
     root_path = request.scope.get("root_path", "")
     response = RedirectResponse(
-        url=f"{root_path}/c/{course}",
+        url=f"{root_path}/{course}",
         status_code=303,
     )
     response.set_cookie(
@@ -194,7 +194,7 @@ async def enter_pid(
 
 # Answer Submission Route
 
-@router.post("/c/{course}/answer")
+@router.post("/{course}/answer")
 async def submit_answer(
     request: Request,
     course: str,
@@ -331,7 +331,7 @@ async def submit_answer(
     return AnswerSubmitResponse(status="submitted", counts=counts)
 
 
-@router.get("/c/{course}/results/{qid}")
+@router.get("/{course}/results/{qid}")
 async def get_shared_results(
     course: str,
     qid: str,
@@ -400,7 +400,7 @@ def strip_pids_from_text(text: str) -> str:
     return re.sub(pattern, '[PID]', text)
 
 
-@router.post("/c/{course}/ask")
+@router.post("/{course}/ask")
 async def ask_question(
     request: Request,
     course: str,

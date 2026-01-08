@@ -46,7 +46,7 @@ class TestSessionArchiving:
 
         # Stop session
         response = client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -89,7 +89,7 @@ class TestSessionArchiving:
 
         # Stop session
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -144,7 +144,7 @@ class TestSessionArchiving:
 
         # Stop session
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -171,7 +171,7 @@ class TestSessionArchiving:
         redis_client_wrapper.start_session("test-course")
 
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -208,7 +208,7 @@ class TestSessionCleanup:
 
         # Stop session (archives data)
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -218,7 +218,7 @@ class TestSessionCleanup:
 
         # Start new session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -255,7 +255,7 @@ class TestSessionCleanup:
         )
         redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "A")
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -263,7 +263,7 @@ class TestSessionCleanup:
 
         # Session 2
         client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
         qid2 = redis_client_wrapper.create_question(
@@ -271,7 +271,7 @@ class TestSessionCleanup:
         )
         redis_client_wrapper.submit_answer("test-course", qid2, "A12345679", True)
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -322,14 +322,14 @@ class TestArchiveRoutes:
             )
             redis_client_wrapper.submit_answer("test-course", qid, f"A1234567{i}", "A")
             client.post(
-                "/c/test-course/admin/session/stop",
+                "/test-course/admin/session/stop",
                 cookies={"admin_session": admin_cookie},
             )
             time.sleep(0.1)
 
         # Get archives page
         response = client.get(
-            "/c/test-course/admin/archives",
+            "/test-course/admin/archives",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -365,7 +365,7 @@ class TestArchiveRoutes:
         redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "B")
 
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -375,7 +375,7 @@ class TestArchiveRoutes:
 
         # Download archive
         response = client.get(
-            f"/c/test-course/admin/archives/{session_id}",
+            f"/test-course/admin/archives/{session_id}",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -401,7 +401,7 @@ class TestArchiveRoutes:
         )
 
         response = client.get(
-            "/c/test-course/admin/archives",
+            "/test-course/admin/archives",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -420,7 +420,7 @@ class TestArchiveRoutes:
         )
 
         response = client.get(
-            "/c/test-course/admin/archives/nonexistent-id",
+            "/test-course/admin/archives/nonexistent-id",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -429,11 +429,11 @@ class TestArchiveRoutes:
     def test_archives_require_auth(self, client: TestClient) -> None:
         """Test that archives endpoints require authentication"""
         # Archives page
-        response = client.get("/c/test-course/admin/archives")
+        response = client.get("/test-course/admin/archives")
         assert response.status_code == 403
 
         # Archive download
-        response = client.get("/c/test-course/admin/archives/some-id")
+        response = client.get("/test-course/admin/archives/some-id")
         assert response.status_code == 403
 
 
@@ -462,7 +462,7 @@ class TestArchiveTTL:
         )
 
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -498,7 +498,7 @@ class TestArchiveTTL:
         )
 
         client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
         )
 

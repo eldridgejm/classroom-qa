@@ -36,7 +36,7 @@ class TestSessionManagement:
         )
 
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": cookie},
         )
 
@@ -51,7 +51,7 @@ class TestSessionManagement:
 
     def test_session_start_requires_auth(self, client: TestClient) -> None:
         """Test that starting session requires authentication"""
-        response = client.post("/c/test-course/admin/session/start")
+        response = client.post("/test-course/admin/session/start")
 
         assert response.status_code in [401, 403]
 
@@ -72,7 +72,7 @@ class TestSessionManagement:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": cookie},
         )
 
@@ -85,7 +85,7 @@ class TestSessionManagement:
 
     def test_session_stop_requires_auth(self, client: TestClient) -> None:
         """Test that stopping session requires authentication"""
-        response = client.post("/c/test-course/admin/session/stop")
+        response = client.post("/test-course/admin/session/stop")
 
         assert response.status_code in [401, 403]
 
@@ -108,7 +108,7 @@ class TestSessionManagement:
 
         # Start session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": cookie},
         )
         assert response.status_code == 200
@@ -116,7 +116,7 @@ class TestSessionManagement:
 
         # Stop session
         response = client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": cookie},
         )
         assert response.status_code == 200
@@ -143,7 +143,7 @@ class TestQuestionCreation:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={
                 "type": "mcq",
@@ -179,7 +179,7 @@ class TestQuestionCreation:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -210,7 +210,7 @@ class TestQuestionCreation:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "numeric"},
         )
@@ -227,7 +227,7 @@ class TestQuestionCreation:
     def test_create_question_requires_auth(self, client: TestClient) -> None:
         """Test that creating question requires authentication"""
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             data={"type": "mcq", "options": ["A", "B"]},
         )
 
@@ -246,7 +246,7 @@ class TestQuestionCreation:
 
         # Don't start session
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq", "options": ["A", "B"]},
         )
@@ -270,7 +270,7 @@ class TestQuestionCreation:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq"},
         )
@@ -293,7 +293,7 @@ class TestQuestionCreation:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "invalid_type"},
         )
@@ -320,7 +320,7 @@ class TestCurrentQuestion:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -349,7 +349,7 @@ class TestCurrentQuestion:
 
         # Create first question
         response1 = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -357,7 +357,7 @@ class TestCurrentQuestion:
 
         # Create second question
         response2 = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq", "options": ["A", "B"]},
         )
@@ -389,7 +389,7 @@ class TestQuestionStop:
 
         # Create question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -397,7 +397,7 @@ class TestQuestionStop:
 
         # Stop question
         response = client.post(
-            f"/c/test-course/admin/question/{qid}/stop",
+            f"/test-course/admin/question/{qid}/stop",
             cookies={"admin_session": cookie},
         )
 
@@ -415,7 +415,7 @@ class TestQuestionStop:
 
     def test_stop_question_requires_auth(self, client: TestClient) -> None:
         """Test that stopping question requires authentication"""
-        response = client.post("/c/test-course/admin/question/q-123/stop")
+        response = client.post("/test-course/admin/question/q-123/stop")
 
         assert response.status_code in [401, 403]
 
@@ -435,7 +435,7 @@ class TestQuestionStop:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question/nonexistent-q/stop",
+            "/test-course/admin/question/nonexistent-q/stop",
             cookies={"admin_session": cookie},
         )
 
@@ -463,7 +463,7 @@ class TestMultipleQuestionsLifecycle:
 
         # Create first question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         )
@@ -472,14 +472,14 @@ class TestMultipleQuestionsLifecycle:
 
         # Stop first question
         client.post(
-            f"/c/test-course/admin/question/{qid1}/stop",
+            f"/test-course/admin/question/{qid1}/stop",
             cookies={"admin_session": cookie},
         )
         assert redis_client_wrapper.get_current_question("test-course") is None
 
         # Create second question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -488,7 +488,7 @@ class TestMultipleQuestionsLifecycle:
 
         # Stop second question
         client.post(
-            f"/c/test-course/admin/question/{qid2}/stop",
+            f"/test-course/admin/question/{qid2}/stop",
             cookies={"admin_session": cookie},
         )
         assert redis_client_wrapper.get_current_question("test-course") is None
@@ -514,7 +514,7 @@ class TestMultipleQuestionsLifecycle:
 
         # Create MCQ
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq", "options": ["A", "B", "C"]},
         )
@@ -522,7 +522,7 @@ class TestMultipleQuestionsLifecycle:
 
         # Create T/F
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -530,7 +530,7 @@ class TestMultipleQuestionsLifecycle:
 
         # Create Numeric
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "numeric"},
         )
@@ -550,7 +550,7 @@ class TestEdgeCases:
         """Test creating question for nonexistent course"""
         # Even with valid cookie, course must exist
         response = client.post(
-            "/c/nonexistent-course/admin/question",
+            "/nonexistent-course/admin/question",
             data={"type": "tf"},
         )
 
@@ -573,7 +573,7 @@ class TestEdgeCases:
 
         # Create question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "tf"},
         )
@@ -581,7 +581,7 @@ class TestEdgeCases:
 
         # Stop session (should handle active question)
         response = client.post(
-            "/c/test-course/admin/session/stop",
+            "/test-course/admin/session/stop",
             cookies={"admin_session": cookie},
         )
 
@@ -602,14 +602,14 @@ class TestEdgeCases:
 
         # Start session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": cookie},
         )
         assert response.status_code == 200
 
         # Start again
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": cookie},
         )
 
@@ -632,7 +632,7 @@ class TestEdgeCases:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": cookie},
             data={"type": "mcq", "options": []},
         )
@@ -669,13 +669,13 @@ class TestShareResults:
         redis_wrapper, qid = self._start_session_with_question(redis_client)
 
         stop_response = client.post(
-            f"/c/test-course/admin/question/{qid}/stop",
+            f"/test-course/admin/question/{qid}/stop",
             cookies={"admin_session": admin_cookie},
         )
         assert stop_response.status_code == 200
 
         response = client.post(
-            f"/c/test-course/admin/question/{qid}/share-results",
+            f"/test-course/admin/question/{qid}/share-results",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -703,7 +703,7 @@ class TestShareResults:
         _, qid = self._start_session_with_question(redis_client)
 
         response = client.post(
-            f"/c/test-course/admin/question/{qid}/share-results",
+            f"/test-course/admin/question/{qid}/share-results",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -724,19 +724,19 @@ class TestShareResults:
         _, qid = self._start_session_with_question(redis_client)
 
         client.post(
-            f"/c/test-course/admin/question/{qid}/stop",
+            f"/test-course/admin/question/{qid}/stop",
             cookies={"admin_session": admin_cookie},
         )
 
         first = client.post(
-            f"/c/test-course/admin/question/{qid}/share-results",
+            f"/test-course/admin/question/{qid}/share-results",
             cookies={"admin_session": admin_cookie},
         )
         assert first.status_code == 200
         assert first.json()["status"] == "shared"
 
         second = client.post(
-            f"/c/test-course/admin/question/{qid}/share-results",
+            f"/test-course/admin/question/{qid}/share-results",
             cookies={"admin_session": admin_cookie},
         )
         assert second.status_code == 200
@@ -746,6 +746,6 @@ class TestShareResults:
         """Sharing results without admin auth is rejected."""
 
         response = client.post(
-            "/c/test-course/admin/question/q-any/share-results",
+            "/test-course/admin/question/q-any/share-results",
         )
         assert response.status_code in [401, 403]

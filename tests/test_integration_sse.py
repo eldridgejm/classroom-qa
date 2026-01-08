@@ -42,7 +42,7 @@ class TestSSEIntegration:
 
         # 1. Admin starts session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200
@@ -61,7 +61,7 @@ class TestSSEIntegration:
 
         # 3. Admin creates MCQ question (using form data)
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         )
