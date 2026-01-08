@@ -11,7 +11,6 @@ This test file covers:
 - Course data structure validation
 """
 
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -104,7 +103,6 @@ class TestCourseConfig:
         data = {
             "secret": "test-secret",
             "name": "Test Course",
-            "created_at": "2025-11-11T00:00:00Z",
         }
 
         course = CourseConfig("test-slug", data)
@@ -112,29 +110,11 @@ class TestCourseConfig:
         assert course.slug == "test-slug"
         assert course.secret == "test-secret"
         assert course.name == "Test Course"
-        assert isinstance(course.created_at, datetime)
-        assert course.created_at.year == 2025
-        assert course.created_at.month == 11
-        assert course.created_at.day == 11
-
-    def test_course_config_datetime_object(self) -> None:
-        """Test CourseConfig with datetime object instead of string"""
-        dt = datetime(2025, 11, 11, 0, 0, 0)
-        data = {
-            "secret": "test-secret",
-            "name": "Test Course",
-            "created_at": dt,
-        }
-
-        course = CourseConfig("test-slug", data)
-
-        assert course.created_at == dt
 
     def test_course_config_missing_secret(self) -> None:
         """Test that missing secret raises KeyError"""
         data = {
             "name": "Test Course",
-            "created_at": "2025-11-11T00:00:00Z",
         }
 
         with pytest.raises(KeyError):
@@ -144,31 +124,9 @@ class TestCourseConfig:
         """Test that missing name raises KeyError"""
         data = {
             "secret": "test-secret",
-            "created_at": "2025-11-11T00:00:00Z",
         }
 
         with pytest.raises(KeyError):
-            CourseConfig("test-slug", data)
-
-    def test_course_config_missing_created_at(self) -> None:
-        """Test that missing created_at raises KeyError"""
-        data = {
-            "secret": "test-secret",
-            "name": "Test Course",
-        }
-
-        with pytest.raises(KeyError):
-            CourseConfig("test-slug", data)
-
-    def test_course_config_invalid_datetime(self) -> None:
-        """Test that invalid datetime string raises ValueError"""
-        data = {
-            "secret": "test-secret",
-            "name": "Test Course",
-            "created_at": "invalid-date",
-        }
-
-        with pytest.raises(ValueError):
             CourseConfig("test-slug", data)
 
     def test_course_config_empty_secret(self) -> None:
@@ -176,7 +134,6 @@ class TestCourseConfig:
         data = {
             "secret": "",
             "name": "Test Course",
-            "created_at": "2025-11-11T00:00:00Z",
         }
 
         course = CourseConfig("test-slug", data)
@@ -187,7 +144,6 @@ class TestCourseConfig:
         data = {
             "secret": "test-secret",
             "name": "",
-            "created_at": "2025-11-11T00:00:00Z",
         }
 
         course = CourseConfig("test-slug", data)
@@ -338,7 +294,6 @@ class TestDataStructureValidation:
 [courses.valid-course]
 secret = "valid-secret"
 name = "Valid Course Name"
-created_at = "2025-11-11T00:00:00Z"
 """)
 
         settings = Settings(courses_file=str(valid_file))
@@ -351,7 +306,6 @@ created_at = "2025-11-11T00:00:00Z"
         assert course.slug == "valid-course"
         assert course.secret == "valid-secret"
         assert course.name == "Valid Course Name"
-        assert isinstance(course.created_at, datetime)
 
     def test_multiple_courses_structure(self, tmp_path: Path) -> None:
         """Test that multiple courses are loaded correctly"""
@@ -360,17 +314,14 @@ created_at = "2025-11-11T00:00:00Z"
 [courses.course1]
 secret = "secret1"
 name = "Course One"
-created_at = "2025-01-01T00:00:00Z"
 
 [courses.course2]
 secret = "secret2"
 name = "Course Two"
-created_at = "2025-02-01T00:00:00Z"
 
 [courses.course3]
 secret = "secret3"
 name = "Course Three"
-created_at = "2025-03-01T00:00:00Z"
 """)
 
         settings = Settings(courses_file=str(multi_file))
@@ -388,7 +339,6 @@ created_at = "2025-03-01T00:00:00Z"
 [courses.special-course]
 secret = "secret"
 name = "Course: Data Science & Machine Learning (2025)"
-created_at = "2025-11-11T00:00:00Z"
 """)
 
         settings = Settings(courses_file=str(special_file))
@@ -405,7 +355,6 @@ created_at = "2025-11-11T00:00:00Z"
 [courses.long-secret-course]
 secret = "{long_secret}"
 name = "Long Secret Course"
-created_at = "2025-11-11T00:00:00Z"
 """)
 
         settings = Settings(courses_file=str(long_file))
@@ -422,17 +371,14 @@ created_at = "2025-11-11T00:00:00Z"
 [courses.dsc80-wi25]
 secret = "s1"
 name = "DSC 80"
-created_at = "2025-11-11T00:00:00Z"
 
 [courses.intro-to-python]
 secret = "s2"
 name = "Intro to Python"
-created_at = "2025-11-11T00:00:00Z"
 
 [courses.cs101]
 secret = "s3"
 name = "CS 101"
-created_at = "2025-11-11T00:00:00Z"
 """)
 
         settings = Settings(courses_file=str(slug_file))
@@ -443,31 +389,3 @@ created_at = "2025-11-11T00:00:00Z"
         assert "intro-to-python" in courses
         assert "cs101" in courses
 
-    def test_iso8601_datetime_formats(self, tmp_path: Path) -> None:
-        """Test various ISO 8601 datetime formats"""
-        datetime_file = tmp_path / "datetime.toml"
-        datetime_file.write_text("""
-[courses.course1]
-secret = "s1"
-name = "Course 1"
-created_at = "2025-11-11T00:00:00Z"
-
-[courses.course2]
-secret = "s2"
-name = "Course 2"
-created_at = "2025-11-11T10:30:45Z"
-
-[courses.course3]
-secret = "s3"
-name = "Course 3"
-created_at = "2025-11-11T10:30:45.123456Z"
-""")
-
-        settings = Settings(courses_file=str(datetime_file))
-        courses = settings.load_courses()
-
-        assert len(courses) == 3
-
-        # All should parse successfully
-        for course in courses.values():
-            assert isinstance(course.created_at, datetime)

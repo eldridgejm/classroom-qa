@@ -51,12 +51,10 @@ def test_settings(tmp_path: Path, redis_server: str) -> Settings:
 [courses.test-course]
 secret = "test-secret-123"
 name = "Test Course"
-created_at = "2025-11-11T00:00:00Z"
 
 [courses.another-course]
 secret = "another-secret-456"
 name = "Another Test Course"
-created_at = "2025-11-11T00:00:00Z"
 """)
 
     # Create test settings
@@ -99,12 +97,10 @@ def sample_courses() -> dict[str, dict[str, str]]:
         "test-course": {
             "secret": "test-secret-123",
             "name": "Test Course",
-            "created_at": "2025-11-11T00:00:00Z",
         },
         "another-course": {
             "secret": "another-secret-456",
             "name": "Another Test Course",
-            "created_at": "2025-11-11T00:00:00Z",
         },
     }
 

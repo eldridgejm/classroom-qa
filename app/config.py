@@ -3,7 +3,6 @@ Configuration management for the application
 """
 
 import tomllib
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +17,6 @@ class CourseConfig:
         self.slug = slug
         self.secret: str = data["secret"]
         self.name: str = data["name"]
-        self.created_at: datetime = (
-            data["created_at"]
-            if isinstance(data["created_at"], datetime)
-            else datetime.fromisoformat(data["created_at"])
-        )
 
 
 class Settings(BaseSettings):
