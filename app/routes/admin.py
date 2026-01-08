@@ -111,7 +111,7 @@ class QuestionResultsShareResponse(BaseModel):
     question_id: str
 
 
-@router.get("/c/{course}/admin", response_class=HTMLResponse)
+@router.get("/{course}/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, course: str) -> Response:
     """
     Admin page - shows login if not authenticated, dashboard if authenticated
@@ -156,7 +156,7 @@ async def admin_page(request: Request, course: str) -> Response:
         )
 
 
-@router.post("/c/{course}/admin/login")
+@router.post("/{course}/admin/login")
 async def admin_login(
     request: Request,
     course: str,
@@ -190,7 +190,7 @@ async def admin_login(
     # Redirect to admin dashboard (include root_path for subpath deployments)
     root_path = request.scope.get("root_path", "")
     response = RedirectResponse(
-        url=f"{root_path}/c/{course}/admin",
+        url=f"{root_path}/{course}/admin",
         status_code=303,
     )
     response.set_cookie(
@@ -207,7 +207,7 @@ async def admin_login(
 
 # Session Management Routes
 
-@router.post("/c/{course}/admin/session/start")
+@router.post("/{course}/admin/session/start")
 async def start_session(
     course: str,
     _: Annotated[None, Depends(verify_admin_auth)],
@@ -230,7 +230,7 @@ async def start_session(
     return SessionResponse(status="started")
 
 
-@router.post("/c/{course}/admin/session/stop")
+@router.post("/{course}/admin/session/stop")
 async def stop_session(
     course: str,
     _: Annotated[None, Depends(verify_admin_auth)],
@@ -255,7 +255,7 @@ async def stop_session(
 
 # Question Management Routes
 
-@router.post("/c/{course}/admin/question")
+@router.post("/{course}/admin/question")
 async def create_question(
     request: Request,
     course: str,
@@ -348,7 +348,7 @@ async def create_question(
     return QuestionResponse(question_id=question_id)
 
 
-@router.post("/c/{course}/admin/question/{qid}/stop")
+@router.post("/{course}/admin/question/{qid}/stop")
 async def stop_question(
     course: str,
     qid: str,
@@ -376,7 +376,7 @@ async def stop_question(
     return QuestionStopResponse(status="stopped", question_id=qid)
 
 
-@router.post("/c/{course}/admin/question/{qid}/share-results")
+@router.post("/{course}/admin/question/{qid}/share-results")
 async def share_results_with_students(
     course: str,
     qid: str,
@@ -421,7 +421,7 @@ async def share_results_with_students(
     return QuestionResultsShareResponse(status="shared", question_id=qid)
 
 
-@router.get("/c/{course}/admin/distribution")
+@router.get("/{course}/admin/distribution")
 async def get_distribution(
     course: str,
     _: Annotated[None, Depends(verify_admin_auth)],
@@ -447,7 +447,7 @@ async def get_distribution(
     return DistributionResponse(**distribution)
 
 
-@router.get("/c/{course}/admin/export")
+@router.get("/{course}/admin/export")
 async def export_session_data(
     course: str,
     _: Annotated[None, Depends(verify_admin_auth)],
@@ -455,7 +455,7 @@ async def export_session_data(
 ) -> JSONResponse:
     """
     Export all session data as JSON
-    DEPRECATED: Use /c/{course}/admin/archives instead
+    DEPRECATED: Use /{course}/admin/archives instead
     """
     # Verify course exists
     course_config = app.config.settings.get_course(course)
@@ -510,7 +510,7 @@ async def export_session_data(
 # Archive Routes
 
 
-@router.get("/c/{course}/admin/archives", response_class=HTMLResponse)
+@router.get("/{course}/admin/archives", response_class=HTMLResponse)
 async def archives_page(
     request: Request,
     course: str,
@@ -543,7 +543,7 @@ async def archives_page(
     )
 
 
-@router.get("/c/{course}/admin/archives/{session_id}")
+@router.get("/{course}/admin/archives/{session_id}")
 async def download_archive(
     course: str,
     session_id: str,
@@ -570,7 +570,7 @@ async def download_archive(
 # Student Q&A Routes
 
 
-@router.get("/c/{course}/admin/questions")
+@router.get("/{course}/admin/questions")
 async def get_student_questions(
     course: str,
     _: Annotated[None, Depends(verify_admin_auth)],
@@ -590,7 +590,7 @@ async def get_student_questions(
     return questions
 
 
-@router.delete("/c/{course}/admin/questions/{question_id}")
+@router.delete("/{course}/admin/questions/{question_id}")
 async def dismiss_question(
     course: str,
     question_id: str,

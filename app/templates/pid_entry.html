@@ -14,7 +14,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/enter-pid" class="space-y-4">
+        <form method="POST" action="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/enter-pid" class="space-y-4">
             <div>
                 <label for="pid" class="block text-sm font-medium text-gray-700 mb-1">
                     Student PID

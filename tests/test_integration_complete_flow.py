@@ -41,7 +41,7 @@ class TestCompleteFlow:
 
         # 1. Admin starts session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200
@@ -49,7 +49,7 @@ class TestCompleteFlow:
 
         # 2. Admin creates MCQ question (using form data)
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         )
@@ -60,7 +60,7 @@ class TestCompleteFlow:
 
         # 3. Student submits answer (using form data)
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": student_cookie},
             data={"question_id": question_id, "response": "A"},
         )
@@ -72,7 +72,7 @@ class TestCompleteFlow:
 
         # 4. Admin stops question
         response = client.post(
-            f"/c/test-course/admin/question/{question_id}/stop",
+            f"/test-course/admin/question/{question_id}/stop",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200, f"Stop question failed: {response.text}"
@@ -87,7 +87,7 @@ class TestCompleteFlow:
 
         # Verify student can no longer submit answer after question stopped
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": student_cookie},
             data={"question_id": question_id, "response": "B"},
         )
@@ -112,14 +112,14 @@ class TestCompleteFlow:
 
         # Start session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200
 
         # Create T/F question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "tf"},
         )
@@ -128,7 +128,7 @@ class TestCompleteFlow:
 
         # Student submits answer (boolean value as string from form data)
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": student_cookie},
             data={"question_id": question_id, "response": "true"},
         )
@@ -140,7 +140,7 @@ class TestCompleteFlow:
 
         # Stop question
         response = client.post(
-            f"/c/test-course/admin/question/{question_id}/stop",
+            f"/test-course/admin/question/{question_id}/stop",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200
@@ -162,14 +162,14 @@ class TestCompleteFlow:
 
         # Start session
         response = client.post(
-            "/c/test-course/admin/session/start",
+            "/test-course/admin/session/start",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200
 
         # Create numeric question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "numeric"},
         )
@@ -178,7 +178,7 @@ class TestCompleteFlow:
 
         # Student submits numeric answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": student_cookie},
             data={"question_id": question_id, "response": "42"},
         )
@@ -189,7 +189,7 @@ class TestCompleteFlow:
 
         # Stop question
         response = client.post(
-            f"/c/test-course/admin/question/{question_id}/stop",
+            f"/test-course/admin/question/{question_id}/stop",
             cookies={"admin_session": admin_cookie},
         )
         assert response.status_code == 200

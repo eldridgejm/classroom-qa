@@ -52,7 +52,7 @@ class TestDistributionEndpoint:
 
         # Get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -94,7 +94,7 @@ class TestDistributionEndpoint:
 
         # Get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -137,7 +137,7 @@ class TestDistributionEndpoint:
 
         # Get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -178,7 +178,7 @@ class TestDistributionEndpoint:
 
         # Get distribution without any answers
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -210,7 +210,7 @@ class TestDistributionEndpoint:
 
         # Get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -231,7 +231,7 @@ class TestDistributionEndpoint:
         redis_client_wrapper.create_question("test-course", QuestionType.MCQ, ["A", "B"])
 
         # Try to get distribution without admin cookie
-        response = client.get("/c/test-course/admin/distribution")
+        response = client.get("/test-course/admin/distribution")
 
         assert response.status_code == 403
 
@@ -248,7 +248,7 @@ class TestDistributionEndpoint:
 
         # Try with invalid cookie
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": "invalid-cookie"},
         )
 
@@ -280,7 +280,7 @@ class TestDistributionEndpoint:
 
         # Get initial distribution
         response1 = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -294,7 +294,7 @@ class TestDistributionEndpoint:
 
         # Get updated distribution
         response2 = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -310,7 +310,7 @@ class TestDistributionEndpoint:
         # Try with a course that doesn't exist
         # Note: Auth fails first (403) before course check (404)
         response = client.get(
-            "/c/nonexistent-course/admin/distribution",
+            "/nonexistent-course/admin/distribution",
             cookies={"admin_session": "some-cookie"},
         )
 
@@ -329,7 +329,7 @@ class TestDistributionEndpoint:
 
         # Don't start session, just try to get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -360,7 +360,7 @@ class TestDistributionEndpoint:
 
         # Get distribution
         response = client.get(
-            "/c/test-course/admin/distribution",
+            "/test-course/admin/distribution",
             cookies={"admin_session": admin_cookie},
         )
 

@@ -42,7 +42,7 @@ class TestAskSubmission:
 
         # Submit question
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "What is the meaning of life?"},
             cookies={"student_session": pid_cookie},
         )
@@ -69,7 +69,7 @@ class TestAskSubmission:
         # Submit question with PID embedded
         question_text = "My PID is A12345678 and I have a question about A98765432"
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": question_text},
             cookies={"student_session": pid_cookie},
         )
@@ -103,7 +103,7 @@ class TestAskSubmission:
         # Submit question that's too long (1001 chars)
         question_text = "x" * 1001
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": question_text},
             cookies={"student_session": pid_cookie},
         )
@@ -129,7 +129,7 @@ class TestAskSubmission:
         # Submit question that's exactly 1000 chars
         question_text = "x" * 1000
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": question_text},
             cookies={"student_session": pid_cookie},
         )
@@ -152,7 +152,7 @@ class TestAskSubmission:
 
         # Submit first question
         response1 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "First question"},
             cookies={"student_session": pid_cookie},
         )
@@ -160,7 +160,7 @@ class TestAskSubmission:
 
         # Submit second question immediately (should be rate limited)
         response2 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Second question"},
             cookies={"student_session": pid_cookie},
         )
@@ -186,7 +186,7 @@ class TestAskSubmission:
 
         # Submit question from PID 1
         response1 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Question from PID 1"},
             cookies={"student_session": pid_cookie1},
         )
@@ -194,7 +194,7 @@ class TestAskSubmission:
 
         # Submit question from PID 2 immediately (should succeed)
         response2 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Question from PID 2"},
             cookies={"student_session": pid_cookie2},
         )
@@ -216,7 +216,7 @@ class TestAskSubmission:
 
         # Submit first question
         response1 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "First question"},
             cookies={"student_session": pid_cookie},
         )
@@ -227,7 +227,7 @@ class TestAskSubmission:
 
         # Submit second question (should succeed)
         response2 = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Second question"},
             cookies={"student_session": pid_cookie},
         )
@@ -238,7 +238,7 @@ class TestAskSubmission:
     ) -> None:
         """Test that question submission without PID cookie is blocked"""
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Unauthorized question"},
         )
 
@@ -253,7 +253,7 @@ class TestAskSubmission:
         # Don't start session
 
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Question without session"},
             cookies={"student_session": pid_cookie},
         )
@@ -277,7 +277,7 @@ class TestAskSubmission:
         redis_client_wrapper.start_session("test-course")
 
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Timestamped question"},
             cookies={"student_session": pid_cookie},
         )
@@ -315,7 +315,7 @@ class TestAdminQuestionView:
         redis_client_wrapper.start_session("test-course")
 
         response = client.get(
-            "/c/test-course/admin/questions",
+            "/test-course/admin/questions",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -345,7 +345,7 @@ class TestAdminQuestionView:
         for i in range(3):
             pid_cookie = create_pid_cookie(f"A1234567{i}", test_settings.secret_key)
             client.post(
-                "/c/test-course/ask",
+                "/test-course/ask",
                 data={"question": f"Question {i + 1}"},
                 cookies={"student_session": pid_cookie},
             )
@@ -353,7 +353,7 @@ class TestAdminQuestionView:
 
         # Get questions as admin
         response = client.get(
-            "/c/test-course/admin/questions",
+            "/test-course/admin/questions",
             cookies={"admin_session": admin_cookie},
         )
 
@@ -376,7 +376,7 @@ class TestAdminQuestionView:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test that getting questions requires admin auth"""
-        response = client.get("/c/test-course/admin/questions")
+        response = client.get("/test-course/admin/questions")
 
         assert response.status_code == 403
 
@@ -396,7 +396,7 @@ class TestAdminQuestionView:
 
         # Submit question
         response = client.post(
-            "/c/test-course/ask",
+            "/test-course/ask",
             data={"question": "Question with TTL"},
             cookies={"student_session": pid_cookie},
         )

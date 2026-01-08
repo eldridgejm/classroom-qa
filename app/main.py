@@ -12,12 +12,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Include routers
-app.include_router(admin.router, tags=["admin"])
-app.include_router(student.router, tags=["student"])
-app.include_router(sse.router, tags=["sse"])
-
-
+# Define health endpoints before including routers
+# (so they take precedence over the /{course} routes)
 @app.get("/")
 async def root() -> dict[str, str]:
     """Health check endpoint"""
@@ -28,3 +24,9 @@ async def root() -> dict[str, str]:
 async def health() -> dict[str, str]:
     """Health check endpoint for monitoring"""
     return {"status": "healthy"}
+
+
+# Include routers
+app.include_router(admin.router, tags=["admin"])
+app.include_router(student.router, tags=["student"])
+app.include_router(sse.router, tags=["sse"])

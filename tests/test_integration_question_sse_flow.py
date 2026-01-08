@@ -54,7 +54,7 @@ class TestQuestionSSEFlow:
 
         # Create MCQ question
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         )
@@ -180,7 +180,7 @@ class TestQuestionSSEFlow:
 
         # Create MCQ question with form data (simulating HTMX)
         response = client.post(
-            "/c/test-course/admin/question",
+            "/test-course/admin/question",
             cookies={"admin_session": admin_cookie},
             data={"type": "mcq", "options": ["A", "B", "C", "D"]},
         )

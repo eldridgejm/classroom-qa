@@ -46,7 +46,7 @@ class TestMCQAnswerSubmission:
 
         # Submit answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -87,7 +87,7 @@ class TestMCQAnswerSubmission:
         for pid, answer in students:
             pid_cookie = create_pid_cookie(pid, test_settings.secret_key)
             response = client.post(
-                "/c/test-course/answer",
+                "/test-course/answer",
                 cookies={"student_session": pid_cookie},
                 data={"question_id": qid, "response": answer},
             )
@@ -115,7 +115,7 @@ class TestMCQAnswerSubmission:
 
         # Submit first answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -127,7 +127,7 @@ class TestMCQAnswerSubmission:
 
         # Change answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "B"},
         )
@@ -157,7 +157,7 @@ class TestMCQAnswerSubmission:
 
         # Submit invalid option
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "E"},
         )
@@ -182,7 +182,7 @@ class TestTrueFalseAnswerSubmission:
 
         # Submit True
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": True},
         )
@@ -210,7 +210,7 @@ class TestTrueFalseAnswerSubmission:
 
         # Submit False
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": False},
         )
@@ -238,14 +238,14 @@ class TestTrueFalseAnswerSubmission:
 
         # Submit True
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": True},
         )
 
         # Change to False
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": False},
         )
@@ -274,7 +274,7 @@ class TestNumericAnswerSubmission:
 
         # Submit integer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": 42},
         )
@@ -298,7 +298,7 @@ class TestNumericAnswerSubmission:
 
         # Submit float
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": 3.14},
         )
@@ -322,7 +322,7 @@ class TestNumericAnswerSubmission:
 
         # Submit string (like "1/2")
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "1/2"},
         )
@@ -349,7 +349,7 @@ class TestAnswerValidation:
 
         # Try to submit answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": "q-nonexistent", "response": "A"},
         )
@@ -376,7 +376,7 @@ class TestAnswerValidation:
 
         # Try to submit answer
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -398,7 +398,7 @@ class TestAnswerValidation:
 
         # Try to submit without cookie
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             data={"question_id": qid, "response": "A"},
         )
 
@@ -419,7 +419,7 @@ class TestAnswerValidation:
 
         # Try to submit boolean to MCQ
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": True},
         )
@@ -441,7 +441,7 @@ class TestAnswerValidation:
 
         # Try to submit string to T/F
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "yes"},
         )
@@ -470,7 +470,7 @@ class TestTimestampUpdates:
         # Submit answer
         before_time = datetime.now(UTC)
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -502,7 +502,7 @@ class TestTimestampUpdates:
 
         # Submit first answer
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -515,7 +515,7 @@ class TestTimestampUpdates:
 
         # Change answer
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "B"},
         )
@@ -545,7 +545,7 @@ class TestConcurrentAnswers:
         def submit_answer(pid: str, answer: str) -> None:
             pid_cookie = create_pid_cookie(pid, test_settings.secret_key)
             client.post(
-                "/c/test-course/answer",
+                "/test-course/answer",
                 cookies={"student_session": pid_cookie},
                 data={"question_id": qid, "response": answer},
             )
@@ -590,7 +590,7 @@ class TestConcurrentAnswers:
         # Define submission function
         def submit_answer(answer: str) -> None:
             client.post(
-                "/c/test-course/answer",
+                "/test-course/answer",
                 cookies={"student_session": pid_cookie},
                 data={"question_id": qid, "response": answer},
             )
@@ -636,7 +636,7 @@ class TestEdgeCases:
 
         # Try to submit empty string (Pydantic validation catches this)
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": ""},
         )
@@ -658,7 +658,7 @@ class TestEdgeCases:
 
         # Try to submit null (Pydantic validation catches this)
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": None},
         )
@@ -676,7 +676,7 @@ class TestEdgeCases:
 
         # Try with malformed question ID
         response = client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": "invalid", "response": "A"},
         )
@@ -690,7 +690,7 @@ class TestEdgeCases:
         pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
 
         response = client.post(
-            "/c/nonexistent-course/answer",
+            "/nonexistent-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": "q-123", "response": "A"},
         )
@@ -722,12 +722,12 @@ class TestResultsEndpoint:
         other_cookie = create_pid_cookie("A00000000", test_settings.secret_key)
 
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": other_cookie},
             data={"question_id": qid, "response": "B"},
         )
@@ -736,7 +736,7 @@ class TestResultsEndpoint:
         assert redis_wrapper.mark_results_shared("test-course", qid)
 
         response = client.get(
-            f"/c/test-course/results/{qid}",
+            f"/test-course/results/{qid}",
             cookies={"student_session": pid_cookie},
         )
 
@@ -756,7 +756,7 @@ class TestResultsEndpoint:
         pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
 
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": pid_cookie},
             data={"question_id": qid, "response": "A"},
         )
@@ -764,7 +764,7 @@ class TestResultsEndpoint:
         redis_wrapper.stop_question("test-course", qid)
 
         response = client.get(
-            f"/c/test-course/results/{qid}",
+            f"/test-course/results/{qid}",
             cookies={"student_session": pid_cookie},
         )
 
@@ -780,7 +780,7 @@ class TestResultsEndpoint:
         viewing_cookie = create_pid_cookie("A99999999", test_settings.secret_key)
 
         client.post(
-            "/c/test-course/answer",
+            "/test-course/answer",
             cookies={"student_session": answering_cookie},
             data={"question_id": qid, "response": "B"},
         )
@@ -789,7 +789,7 @@ class TestResultsEndpoint:
         assert redis_wrapper.mark_results_shared("test-course", qid)
 
         response = client.get(
-            f"/c/test-course/results/{qid}",
+            f"/test-course/results/{qid}",
             cookies={"student_session": viewing_cookie},
         )
 
@@ -810,5 +810,5 @@ class TestResultsEndpoint:
         redis_wrapper.stop_question("test-course", qid)
         redis_wrapper.mark_results_shared("test-course", qid)
 
-        response = client.get(f"/c/test-course/results/{qid}")
+        response = client.get(f"/test-course/results/{qid}")
         assert response.status_code in [401, 403]

@@ -77,7 +77,7 @@
                         <button
                             class="tf-option w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
                             data-value="true"
-                            hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/answer"
+                            hx-post="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/answer"
                             hx-swap="none"
                             hx-on::after-request="handleAnswerSubmit(event)">
                             <span class="font-medium">True</span>
@@ -85,7 +85,7 @@
                         <button
                             class="tf-option w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
                             data-value="false"
-                            hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/answer"
+                            hx-post="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/answer"
                             hx-swap="none"
                             hx-on::after-request="handleAnswerSubmit(event)">
                             <span class="font-medium">False</span>
@@ -173,7 +173,7 @@
             <h2 class="text-xl font-semibold mb-4">Ask</h2>
 
             <form id="ask-form" class="space-y-4"
-                hx-post="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/ask"
+                hx-post="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/ask"
                 hx-swap="none"
                 hx-on::after-request="handleAskSubmit(event)">
                 <div>
@@ -239,7 +239,7 @@
                     </button>
                 </div>
 
-                <form id="change-pid-form" method="POST" action="{{ request.scope.get('root_path', '') }}/c/{{ course_slug }}/enter-pid">
+                <form id="change-pid-form" method="POST" action="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/enter-pid">
                     <div class="mb-4">
                         <label for="new-pid" class="block text-sm font-medium text-gray-700 mb-2">
                             Enter your new PID:
@@ -340,7 +340,7 @@
             button.innerHTML = `<span class="font-medium text-lg">${option}</span>`;
 
             // Add HTMX attributes
-            button.setAttribute('hx-post', `${rootPath}/c/{{ course_slug }}/answer`);
+            button.setAttribute('hx-post', `${rootPath}/{{ course_slug }}/answer`);
             button.setAttribute('hx-vals', JSON.stringify({
                 question_id: currentQuestionId,
                 response: option
@@ -398,7 +398,7 @@
         }
 
         // Submit via fetch
-        fetch(`${rootPath}/c/{{ course_slug }}/answer`, {
+        fetch(`${rootPath}/{{ course_slug }}/answer`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -683,7 +683,7 @@
         }
 
         try {
-            const response = await fetch(`${rootPath}/c/{{ course_slug }}/results/${questionId}`);
+            const response = await fetch(`${rootPath}/{{ course_slug }}/results/${questionId}`);
             if (!response.ok) {
                 throw new Error('Results not available yet.');
             }
