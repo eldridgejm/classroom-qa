@@ -31,7 +31,7 @@ class QuestionMeta(BaseModel):
 class Response(BaseModel):
     """A student's response to a question"""
 
-    pid: str
+    tsn: str
     timestamp: datetime
     value: str | bool | float
 

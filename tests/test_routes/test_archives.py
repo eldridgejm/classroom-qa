@@ -42,7 +42,7 @@ class TestSessionArchiving:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B", "C"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Stop session
         response = client.post(
@@ -81,11 +81,11 @@ class TestSessionArchiving:
         qid1 = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "A")
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345679", "B")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345679", "B")
 
         qid2 = redis_client_wrapper.create_question("test-course", QuestionType.TF)
-        redis_client_wrapper.submit_answer("test-course", qid2, "A12345678", True)
+        redis_client_wrapper.submit_answer("test-course", qid2, "112345678", True)
 
         # Stop session
         client.post(
@@ -113,8 +113,8 @@ class TestSessionArchiving:
         # Find MCQ question and verify responses
         mcq = next(q for q in archive_data["questions"] if q["type"] == "mcq")
         assert len(mcq["responses"]) == 2
-        assert "A12345678" in mcq["responses"]
-        assert "A12345679" in mcq["responses"]
+        assert "112345678" in mcq["responses"]
+        assert "112345679" in mcq["responses"]
 
     def test_stop_session_clears_current_data(
         self, client: TestClient, test_settings: Settings, redis_client
@@ -136,7 +136,7 @@ class TestSessionArchiving:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Verify data exists before stop
         assert redis_client_wrapper.get_question_meta("test-course", qid) is not None
@@ -204,7 +204,7 @@ class TestSessionCleanup:
         qid1 = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345678", "A")
 
         # Stop session (archives data)
         client.post(
@@ -253,7 +253,7 @@ class TestSessionCleanup:
         qid1 = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345678", "A")
         client.post(
             "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
@@ -269,7 +269,7 @@ class TestSessionCleanup:
         qid2 = redis_client_wrapper.create_question(
             "test-course", QuestionType.TF
         )
-        redis_client_wrapper.submit_answer("test-course", qid2, "A12345679", True)
+        redis_client_wrapper.submit_answer("test-course", qid2, "112345679", True)
         client.post(
             "/test-course/admin/session/stop",
             cookies={"admin_session": admin_cookie},
@@ -320,7 +320,7 @@ class TestArchiveRoutes:
             qid = redis_client_wrapper.create_question(
                 "test-course", QuestionType.MCQ, ["A", "B"]
             )
-            redis_client_wrapper.submit_answer("test-course", qid, f"A1234567{i}", "A")
+            redis_client_wrapper.submit_answer("test-course", qid, f"11234567{i}", "A")
             client.post(
                 "/test-course/admin/session/stop",
                 cookies={"admin_session": admin_cookie},
@@ -362,7 +362,7 @@ class TestArchiveRoutes:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B", "C"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "B")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "B")
 
         client.post(
             "/test-course/admin/session/stop",

@@ -11,51 +11,51 @@ from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 
 from app.config import Settings
 
-# PID format validation (UCSD: A######## or U########)
-PID_PATTERN = re.compile(r"^[AU]\d{8}$")
+# TSN format validation (UCSD Triton Student Number: 9 digits)
+TSN_PATTERN = re.compile(r"[0-9]{9}")
 
 
-def validate_pid_format(pid: str) -> bool:
+def validate_tsn_format(tsn: str) -> bool:
     """
-    Validate PID format (A or U followed by 8 digits)
+    Validate TSN format (exactly 9 digits)
 
     Args:
-        pid: Student PID to validate
+        tsn: Student TSN to validate
 
     Returns:
         True if valid format, False otherwise
     """
-    return bool(PID_PATTERN.match(pid))
+    return bool(TSN_PATTERN.fullmatch(tsn))
 
 
-# PID Cookie Management
+# TSN Cookie Management
 
 
-def create_pid_cookie(
-    pid: str,
+def create_tsn_cookie(
+    tsn: str,
     secret_key: str,
 ) -> str:
     """
-    Create a signed cookie for a student PID
+    Create a signed cookie for a student TSN
 
     Args:
-        pid: Student PID
+        tsn: Student TSN
         secret_key: Secret key for signing
 
     Returns:
         Signed cookie string
     """
     signer = TimestampSigner(secret_key)
-    return signer.sign(pid).decode()
+    return signer.sign(tsn).decode()
 
 
-def verify_pid_cookie(
+def verify_tsn_cookie(
     cookie: str | None,
     secret_key: str,
     max_age: int | None = None,
 ) -> str | None:
     """
-    Verify a PID cookie and return the PID
+    Verify a TSN cookie and return the TSN
 
     Args:
         cookie: Signed cookie string
@@ -63,7 +63,8 @@ def verify_pid_cookie(
         max_age: Optional max age in seconds (None = no limit)
 
     Returns:
-        PID if valid, None if invalid or expired
+        TSN if valid, None if invalid, expired, or not a well-formed TSN
+        (e.g., a legacy PID cookie issued before the switch to TSNs)
     """
     if not cookie:
         return None
@@ -72,10 +73,10 @@ def verify_pid_cookie(
         signer = TimestampSigner(secret_key)
         # If max_age is provided, check expiration
         if max_age is not None:
-            pid = signer.unsign(cookie, max_age=max_age).decode()
+            tsn = signer.unsign(cookie, max_age=max_age).decode()
         else:
-            pid = signer.unsign(cookie).decode()
-        return pid
+            tsn = signer.unsign(cookie).decode()
+        return tsn if validate_tsn_format(tsn) else None
     except (BadSignature, SignatureExpired):
         return None
     except Exception:
@@ -194,34 +195,34 @@ def verify_csrf_token(token: str, expected: str) -> bool:
 # FastAPI Dependencies
 
 
-def require_pid(
+def require_tsn(
     cookie: str | None,
     secret_key: str,
     max_age: int | None = None,
 ) -> str:
     """
-    FastAPI dependency to require a valid PID cookie
+    FastAPI dependency to require a valid TSN cookie
 
     Args:
-        cookie: PID cookie from request
+        cookie: TSN cookie from request
         secret_key: Secret key for verification
         max_age: Optional max age in seconds (None = no limit)
 
     Returns:
-        Verified PID
+        Verified TSN
 
     Raises:
         HTTPException: If cookie is invalid or missing
     """
-    pid = verify_pid_cookie(cookie, secret_key, max_age=max_age)
+    tsn = verify_tsn_cookie(cookie, secret_key, max_age=max_age)
 
-    if pid is None:
+    if tsn is None:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or missing PID cookie",
+            detail="Invalid or missing TSN cookie",
         )
 
-    return pid
+    return tsn
 
 
 def require_admin(

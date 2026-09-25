@@ -15,7 +15,7 @@ basic functionality.
 import json
 from fastapi.testclient import TestClient
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 from app.models import EventType
 from app.redis_client import RedisClient
@@ -38,11 +38,11 @@ class TestSSEEndpoints:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test SSE with invalid course returns error"""
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         response = client.get(
             "/sse/student/nonexistent-course",
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 404
@@ -60,7 +60,7 @@ class TestSSEEndpoints:
         admin_cookie = create_admin_cookie(
             "test-course", course.secret, test_settings.secret_key
         )
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Just verify the routes exist (don't try to consume the stream)
         # The async generator will start but we won't read from it

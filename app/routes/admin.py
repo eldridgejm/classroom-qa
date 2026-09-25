@@ -479,8 +479,8 @@ async def export_session_data(
 
         # Format responses
         formatted_responses = {}
-        for pid, response_data in all_responses.items():
-            formatted_responses[pid] = {
+        for tsn, response_data in all_responses.items():
+            formatted_responses[tsn] = {
                 "timestamp": response_data["ts"],
                 "response": response_data["resp"],
             }

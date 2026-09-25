@@ -69,10 +69,10 @@ class TestButtonHighlighting:
         # Wait for page to load
         time.sleep(1)
 
-        # Enter PID if needed
+        # Enter TSN if needed
         try:
-            pid_input = browser.find_element(By.NAME, "pid")
-            pid_input.send_keys("A12345678")
+            tsn_input = browser.find_element(By.NAME, "tsn")
+            tsn_input.send_keys("112345678")
             submit_btn = browser.find_element(By.CSS_SELECTOR, "button[type='submit']")
             submit_btn.click()
             time.sleep(1)
@@ -165,10 +165,10 @@ class TestButtonHighlighting:
         browser.get("http://localhost:8000/c/dsc80-wi25")
         time.sleep(1)
 
-        # Enter PID if needed
+        # Enter TSN if needed
         try:
-            pid_input = browser.find_element(By.NAME, "pid")
-            pid_input.send_keys("A12345678")
+            tsn_input = browser.find_element(By.NAME, "tsn")
+            tsn_input.send_keys("112345678")
             submit_btn = browser.find_element(By.CSS_SELECTOR, "button[type='submit']")
             submit_btn.click()
             time.sleep(1)
@@ -218,10 +218,10 @@ class TestButtonHighlighting:
         browser.get("http://localhost:8000/c/dsc80-wi25")
         time.sleep(1)
 
-        # Enter PID if needed
+        # Enter TSN if needed
         try:
-            pid_input = browser.find_element(By.NAME, "pid")
-            pid_input.send_keys("A12345678")
+            tsn_input = browser.find_element(By.NAME, "tsn")
+            tsn_input.send_keys("112345678")
             submit_btn = browser.find_element(By.CSS_SELECTOR, "button[type='submit']")
             submit_btn.click()
             time.sleep(1)

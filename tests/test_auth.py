@@ -4,8 +4,8 @@ Tests for authentication and authorization (Phase 3)
 This test file covers:
 - Admin secret cookie signing/validation
 - Admin secret verification against courses.toml
-- PID cookie signing/validation
-- PID format validation (UCSD: A########)
+- TSN cookie signing/validation
+- TSN format validation (UCSD: 9 digits)
 - CSRF token generation/validation
 - Invalid/tampered cookies rejection
 - Missing auth handling
@@ -21,157 +21,156 @@ from fastapi import HTTPException
 from app.auth import (
     create_admin_cookie,
     create_csrf_token,
-    create_pid_cookie,
+    create_tsn_cookie,
     require_admin,
-    require_pid,
-    validate_pid_format,
+    require_tsn,
+    validate_tsn_format,
     verify_admin_cookie,
     verify_csrf_token,
-    verify_pid_cookie,
+    verify_tsn_cookie,
 )
 from app.config import Settings
 
 
-class TestPIDValidation:
-    """Test cases for PID format validation"""
+class TestTSNValidation:
+    """Test cases for TSN format validation"""
 
-    def test_valid_pid_format(self) -> None:
-        """Test that valid PID format is accepted"""
-        assert validate_pid_format("A12345678") is True
+    def test_valid_tsn_format(self) -> None:
+        """Test that valid TSN format is accepted"""
+        assert validate_tsn_format("123456789") is True
 
-    def test_valid_pid_all_zeros(self) -> None:
-        """Test that PID with all zeros is valid"""
-        assert validate_pid_format("A00000000") is True
+    def test_valid_tsn_all_zeros(self) -> None:
+        """Test that TSN with all zeros is valid"""
+        assert validate_tsn_format("000000000") is True
 
-    def test_valid_pid_all_nines(self) -> None:
-        """Test that PID with all nines is valid"""
-        assert validate_pid_format("A99999999") is True
+    def test_valid_tsn_all_nines(self) -> None:
+        """Test that TSN with all nines is valid"""
+        assert validate_tsn_format("999999999") is True
 
-    def test_valid_pid_u_prefix(self) -> None:
-        """Test that valid PID format with U prefix is accepted"""
-        assert validate_pid_format("U12345678") is True
+    def test_valid_tsn_leading_zero(self) -> None:
+        """Test that leading zeros are preserved and accepted"""
+        assert validate_tsn_format("012345678") is True
 
-    def test_valid_pid_u_all_zeros(self) -> None:
-        """Test that PID with U prefix and all zeros is valid"""
-        assert validate_pid_format("U00000000") is True
+    def test_invalid_legacy_pid_a_prefix(self) -> None:
+        """Test that a legacy PID with 'A' prefix is invalid"""
+        assert validate_tsn_format("A12345678") is False
 
-    def test_valid_pid_u_all_nines(self) -> None:
-        """Test that PID with U prefix and all nines is valid"""
-        assert validate_pid_format("U99999999") is True
+    def test_invalid_legacy_pid_u_prefix(self) -> None:
+        """Test that a legacy PID with 'U' prefix is invalid"""
+        assert validate_tsn_format("U12345678") is False
 
-    def test_invalid_pid_lowercase_a(self) -> None:
-        """Test that lowercase 'a' is invalid"""
-        assert validate_pid_format("a12345678") is False
+    def test_invalid_tsn_letter_prefix(self) -> None:
+        """Test that 9 characters with a letter prefix is invalid"""
+        assert validate_tsn_format("A123456789") is False
 
-    def test_invalid_pid_lowercase_u(self) -> None:
-        """Test that lowercase 'u' is invalid"""
-        assert validate_pid_format("u12345678") is False
+    def test_invalid_tsn_too_short(self) -> None:
+        """Test that TSN with fewer than 9 digits is invalid"""
+        assert validate_tsn_format("12345678") is False
 
-    def test_invalid_pid_no_prefix(self) -> None:
-        """Test that PID without 'A' or 'U' prefix is invalid"""
-        assert validate_pid_format("12345678") is False
+    def test_invalid_tsn_too_long(self) -> None:
+        """Test that TSN with more than 9 digits is invalid"""
+        assert validate_tsn_format("1234567890") is False
 
-    def test_invalid_pid_wrong_prefix(self) -> None:
-        """Test that PID with wrong prefix is invalid"""
-        assert validate_pid_format("B12345678") is False
+    def test_invalid_tsn_letters_in_number(self) -> None:
+        """Test that TSN with letters in number part is invalid"""
+        assert validate_tsn_format("12345678B") is False
 
-    def test_invalid_pid_too_short(self) -> None:
-        """Test that PID with fewer than 8 digits is invalid"""
-        assert validate_pid_format("A1234567") is False
+    def test_invalid_tsn_special_chars(self) -> None:
+        """Test that TSN with special characters is invalid"""
+        assert validate_tsn_format("1234-5678") is False
 
-    def test_invalid_pid_too_long(self) -> None:
-        """Test that PID with more than 8 digits is invalid"""
-        assert validate_pid_format("A123456789") is False
-
-    def test_invalid_pid_letters_in_number(self) -> None:
-        """Test that PID with letters in number part is invalid"""
-        assert validate_pid_format("A1234567B") is False
-
-    def test_invalid_pid_special_chars(self) -> None:
-        """Test that PID with special characters is invalid"""
-        assert validate_pid_format("A1234-678") is False
-
-    def test_invalid_pid_empty(self) -> None:
+    def test_invalid_tsn_empty(self) -> None:
         """Test that empty string is invalid"""
-        assert validate_pid_format("") is False
+        assert validate_tsn_format("") is False
 
-    def test_invalid_pid_spaces(self) -> None:
-        """Test that PID with spaces is invalid"""
-        assert validate_pid_format("A 12345678") is False
+    def test_invalid_tsn_spaces(self) -> None:
+        """Test that TSN with spaces is invalid"""
+        assert validate_tsn_format("123 456789") is False
+
+    def test_invalid_tsn_trailing_newline(self) -> None:
+        """Test that TSN with a trailing newline is invalid"""
+        assert validate_tsn_format("123456789\n") is False
 
 
-class TestPIDCookies:
-    """Test cases for PID cookie creation and verification"""
+class TestTSNCookies:
+    """Test cases for TSN cookie creation and verification"""
 
-    def test_create_pid_cookie(self, test_settings: Settings) -> None:
-        """Test creating a PID cookie"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+    def test_create_tsn_cookie(self, test_settings: Settings) -> None:
+        """Test creating a TSN cookie"""
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         assert cookie is not None
         assert isinstance(cookie, str)
         assert len(cookie) > 0
 
-    def test_verify_pid_cookie_valid(self, test_settings: Settings) -> None:
-        """Test verifying a valid PID cookie"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
-        pid = verify_pid_cookie(cookie, test_settings.secret_key)
+    def test_verify_tsn_cookie_valid(self, test_settings: Settings) -> None:
+        """Test verifying a valid TSN cookie"""
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
+        tsn = verify_tsn_cookie(cookie, test_settings.secret_key)
 
-        assert pid == "A12345678"
+        assert tsn == "112345678"
 
-    def test_verify_pid_cookie_different_pids(self, test_settings: Settings) -> None:
-        """Test that different PIDs create different cookies"""
-        cookie1 = create_pid_cookie("A11111111", test_settings.secret_key)
-        cookie2 = create_pid_cookie("A22222222", test_settings.secret_key)
+    def test_verify_tsn_cookie_different_tsns(self, test_settings: Settings) -> None:
+        """Test that different TSNs create different cookies"""
+        cookie1 = create_tsn_cookie("111111111", test_settings.secret_key)
+        cookie2 = create_tsn_cookie("122222222", test_settings.secret_key)
 
         assert cookie1 != cookie2
 
-        pid1 = verify_pid_cookie(cookie1, test_settings.secret_key)
-        pid2 = verify_pid_cookie(cookie2, test_settings.secret_key)
+        tsn1 = verify_tsn_cookie(cookie1, test_settings.secret_key)
+        tsn2 = verify_tsn_cookie(cookie2, test_settings.secret_key)
 
-        assert pid1 == "A11111111"
-        assert pid2 == "A22222222"
+        assert tsn1 == "111111111"
+        assert tsn2 == "122222222"
 
-    def test_verify_pid_cookie_invalid(self, test_settings: Settings) -> None:
+    def test_verify_tsn_cookie_invalid(self, test_settings: Settings) -> None:
         """Test that invalid cookie returns None"""
-        pid = verify_pid_cookie("invalid-cookie", test_settings.secret_key)
-        assert pid is None
+        tsn = verify_tsn_cookie("invalid-cookie", test_settings.secret_key)
+        assert tsn is None
 
-    def test_verify_pid_cookie_tampered(self, test_settings: Settings) -> None:
+    def test_verify_tsn_cookie_tampered(self, test_settings: Settings) -> None:
         """Test that tampered cookie returns None"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
         # Tamper with the cookie
         tampered = cookie[:-5] + "XXXXX"
-        pid = verify_pid_cookie(tampered, test_settings.secret_key)
+        tsn = verify_tsn_cookie(tampered, test_settings.secret_key)
 
-        assert pid is None
+        assert tsn is None
 
-    def test_verify_pid_cookie_wrong_secret(self, test_settings: Settings) -> None:
+    def test_verify_tsn_cookie_wrong_secret(self, test_settings: Settings) -> None:
         """Test that cookie signed with different secret fails"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
-        pid = verify_pid_cookie(cookie, "different-secret-key")
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
+        tsn = verify_tsn_cookie(cookie, "different-secret-key")
 
-        assert pid is None
+        assert tsn is None
 
-    def test_verify_pid_cookie_empty(self, test_settings: Settings) -> None:
+    def test_verify_tsn_cookie_legacy_pid(self, test_settings: Settings) -> None:
+        """Test that a validly signed cookie holding a legacy PID is rejected"""
+        cookie = create_tsn_cookie("A12345678", test_settings.secret_key)
+        tsn = verify_tsn_cookie(cookie, test_settings.secret_key)
+
+        assert tsn is None
+
+    def test_verify_tsn_cookie_empty(self, test_settings: Settings) -> None:
         """Test that empty cookie returns None"""
-        pid = verify_pid_cookie("", test_settings.secret_key)
-        assert pid is None
+        tsn = verify_tsn_cookie("", test_settings.secret_key)
+        assert tsn is None
 
-    def test_pid_cookie_with_expiration(self, test_settings: Settings) -> None:
-        """Test PID cookie with expiration time"""
+    def test_tsn_cookie_with_expiration(self, test_settings: Settings) -> None:
+        """Test TSN cookie with expiration time"""
         # Create cookie
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Should be valid immediately with max_age=2
-        pid = verify_pid_cookie(cookie, test_settings.secret_key, max_age=2)
-        assert pid == "A12345678"
+        tsn = verify_tsn_cookie(cookie, test_settings.secret_key, max_age=2)
+        assert tsn == "112345678"
 
         # Wait for expiration
         time.sleep(2)
 
         # Should now be invalid when checked with max_age=1
-        pid = verify_pid_cookie(cookie, test_settings.secret_key, max_age=1)
-        assert pid is None
+        tsn = verify_tsn_cookie(cookie, test_settings.secret_key, max_age=1)
+        assert tsn is None
 
 
 class TestAdminCookies:
@@ -357,41 +356,41 @@ class TestCSRFTokens:
 class TestFastAPIDependencies:
     """Test cases for FastAPI dependency injection"""
 
-    def test_require_pid_valid(self, test_settings: Settings) -> None:
-        """Test require_pid with valid cookie"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+    def test_require_tsn_valid(self, test_settings: Settings) -> None:
+        """Test require_tsn with valid cookie"""
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
-        pid = require_pid(cookie, test_settings.secret_key)
+        tsn = require_tsn(cookie, test_settings.secret_key)
 
-        assert pid == "A12345678"
+        assert tsn == "112345678"
 
-    def test_require_pid_invalid_cookie(self, test_settings: Settings) -> None:
-        """Test require_pid with invalid cookie raises HTTPException"""
+    def test_require_tsn_invalid_cookie(self, test_settings: Settings) -> None:
+        """Test require_tsn with invalid cookie raises HTTPException"""
         with pytest.raises(HTTPException) as exc_info:
-            require_pid("invalid-cookie", test_settings.secret_key)
+            require_tsn("invalid-cookie", test_settings.secret_key)
 
         assert exc_info.value.status_code == 401
-        assert "Invalid or missing PID" in exc_info.value.detail
+        assert "Invalid or missing TSN" in exc_info.value.detail
 
-    def test_require_pid_missing_cookie(self, test_settings: Settings) -> None:
-        """Test require_pid with missing cookie raises HTTPException"""
+    def test_require_tsn_missing_cookie(self, test_settings: Settings) -> None:
+        """Test require_tsn with missing cookie raises HTTPException"""
         with pytest.raises(HTTPException) as exc_info:
-            require_pid(None, test_settings.secret_key)
+            require_tsn(None, test_settings.secret_key)
 
         assert exc_info.value.status_code == 401
-        assert "Invalid or missing PID" in exc_info.value.detail
+        assert "Invalid or missing TSN" in exc_info.value.detail
 
-    def test_require_pid_expired_cookie(self, test_settings: Settings) -> None:
-        """Test require_pid with expired cookie raises HTTPException"""
+    def test_require_tsn_expired_cookie(self, test_settings: Settings) -> None:
+        """Test require_tsn with expired cookie raises HTTPException"""
         # Create cookie
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Wait a bit
         time.sleep(1)
 
         # Try to verify with very short max_age (should fail)
         with pytest.raises(HTTPException) as exc_info:
-            require_pid(cookie, test_settings.secret_key, max_age=0)
+            require_tsn(cookie, test_settings.secret_key, max_age=0)
 
         assert exc_info.value.status_code == 401
 
@@ -464,20 +463,20 @@ class TestSecurityEdgeCases:
     ) -> None:
         """Test that cookies cannot be forged without secret key"""
         # Attempt to create a fake cookie without knowing the secret
-        fake_cookie = "A12345678.fake_signature"
+        fake_cookie = "112345678.fake_signature"
 
-        pid = verify_pid_cookie(fake_cookie, test_settings.secret_key)
-        assert pid is None
+        tsn = verify_tsn_cookie(fake_cookie, test_settings.secret_key)
+        assert tsn is None
 
     def test_different_secrets_incompatible(self) -> None:
         """Test that cookies signed with different secrets are incompatible"""
         secret1 = "secret-key-1"
         secret2 = "secret-key-2"
 
-        cookie = create_pid_cookie("A12345678", secret1)
-        pid = verify_pid_cookie(cookie, secret2)
+        cookie = create_tsn_cookie("112345678", secret1)
+        tsn = verify_tsn_cookie(cookie, secret2)
 
-        assert pid is None
+        assert tsn is None
 
     def test_admin_cookie_requires_exact_course_match(
         self, test_settings: Settings
@@ -508,40 +507,40 @@ class TestSecurityEdgeCases:
     def test_empty_string_secret_rejected(self) -> None:
         """Test that empty string as secret is handled safely"""
         # Should still create a cookie, but it won't verify with different secret
-        cookie = create_pid_cookie("A12345678", "")
-        pid = verify_pid_cookie(cookie, "different-secret")
+        cookie = create_tsn_cookie("112345678", "")
+        tsn = verify_tsn_cookie(cookie, "different-secret")
 
-        assert pid is None
+        assert tsn is None
 
-    def test_special_characters_in_pid(self, test_settings: Settings) -> None:
-        """Test that special characters in PID are rejected by validation"""
+    def test_special_characters_in_tsn(self, test_settings: Settings) -> None:
+        """Test that special characters in TSN are rejected by validation"""
         # These should fail validation
-        invalid_pids = [
-            "A1234567<",
-            "A1234567>",
-            "A1234567;",
-            "A1234567'",
-            'A1234567"',
-            "A1234567&",
+        invalid_tsns = [
+            "12345678<",
+            "12345678>",
+            "12345678;",
+            "12345678'",
+            '12345678"',
+            "12345678&",
         ]
 
-        for invalid_pid in invalid_pids:
-            assert validate_pid_format(invalid_pid) is False
+        for invalid_tsn in invalid_tsns:
+            assert validate_tsn_format(invalid_tsn) is False
 
     def test_null_bytes_in_cookies(self, test_settings: Settings) -> None:
         """Test that null bytes in cookies are handled safely"""
         malicious_cookie = "valid_data\x00malicious_data"
 
-        pid = verify_pid_cookie(malicious_cookie, test_settings.secret_key)
-        assert pid is None
+        tsn = verify_tsn_cookie(malicious_cookie, test_settings.secret_key)
+        assert tsn is None
 
     def test_very_long_cookie_rejected(self, test_settings: Settings) -> None:
         """Test that excessively long cookies are rejected"""
         # Create a very long fake cookie
         long_cookie = "A" * 10000
 
-        pid = verify_pid_cookie(long_cookie, test_settings.secret_key)
-        assert pid is None
+        tsn = verify_tsn_cookie(long_cookie, test_settings.secret_key)
+        assert tsn is None
 
 
 class TestIntegrationScenarios:
@@ -549,20 +548,20 @@ class TestIntegrationScenarios:
 
     def test_full_student_auth_flow(self, test_settings: Settings) -> None:
         """Test complete student authentication flow"""
-        # Step 1: Validate PID format
-        pid = "A12345678"
-        assert validate_pid_format(pid) is True
+        # Step 1: Validate TSN format
+        tsn = "112345678"
+        assert validate_tsn_format(tsn) is True
 
         # Step 2: Create cookie
-        cookie = create_pid_cookie(pid, test_settings.secret_key)
+        cookie = create_tsn_cookie(tsn, test_settings.secret_key)
 
         # Step 3: Verify cookie
-        verified_pid = verify_pid_cookie(cookie, test_settings.secret_key)
-        assert verified_pid == pid
+        verified_tsn = verify_tsn_cookie(cookie, test_settings.secret_key)
+        assert verified_tsn == tsn
 
         # Step 4: Use in dependency
-        required_pid = require_pid(cookie, test_settings.secret_key)
-        assert required_pid == pid
+        required_tsn = require_tsn(cookie, test_settings.secret_key)
+        assert required_tsn == tsn
 
     def test_full_admin_auth_flow(self, test_settings: Settings) -> None:
         """Test complete admin authentication flow"""

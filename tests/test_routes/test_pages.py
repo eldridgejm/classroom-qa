@@ -6,7 +6,7 @@ This test file covers:
 - Admin login POST with valid/invalid secrets
 - Admin dashboard (auth required)
 - Student page loads
-- PID entry flow
+- TSN entry flow
 - Unauthorized access blocked
 - CSRF protection on POSTs
 - Invalid course slug handling
@@ -14,7 +14,7 @@ This test file covers:
 
 from fastapi.testclient import TestClient
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 
 
@@ -187,20 +187,20 @@ class TestAdminDashboard:
 class TestStudentPage:
     """Test cases for student page"""
 
-    def test_student_page_loads_without_pid(self, client: TestClient) -> None:
-        """Test that student page loads and shows PID entry"""
+    def test_student_page_loads_without_tsn(self, client: TestClient) -> None:
+        """Test that student page loads and shows TSN entry"""
         response = client.get("/test-course")
 
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
-        # Should show PID entry form
-        assert b"pid" in response.content.lower()
+        # Should show TSN entry form
+        assert b"tsn" in response.content.lower()
 
-    def test_student_page_with_pid_cookie(
+    def test_student_page_with_tsn_cookie(
         self, client: TestClient, test_settings: Settings
     ) -> None:
-        """Test that student page with PID cookie shows main page"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        """Test that student page with TSN cookie shows main page"""
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         response = client.get(
             "/test-course",
@@ -208,7 +208,7 @@ class TestStudentPage:
         )
 
         assert response.status_code == 200
-        # Should show main student interface, not PID entry
+        # Should show main student interface, not TSN entry
         # Main interface has Answer and Ask panes
         assert b"answer" in response.content.lower() or b"ask" in response.content.lower()
 
@@ -219,71 +219,71 @@ class TestStudentPage:
         assert response.status_code == 404
 
 
-class TestPIDEntry:
-    """Test cases for PID entry flow"""
+class TestTSNEntry:
+    """Test cases for TSN entry flow"""
 
-    def test_pid_entry_valid_format(
+    def test_tsn_entry_valid_format(
         self, client: TestClient, test_settings: Settings
     ) -> None:
-        """Test PID entry with valid format"""
+        """Test TSN entry with valid format"""
         response = client.post(
-            "/test-course/enter-pid",
-            data={"pid": "A12345678"},
+            "/test-course/enter-tsn",
+            data={"tsn": "112345678"},
             follow_redirects=False,
         )
 
         assert response.status_code == 303
         assert response.headers["location"] == "/test-course"
-        # Should set PID cookie
+        # Should set TSN cookie
         assert "student_session" in response.cookies
 
-    def test_pid_entry_invalid_format(self, client: TestClient) -> None:
-        """Test PID entry with invalid format"""
-        invalid_pids = [
-            "a12345678",  # lowercase
-            "12345678",   # no A
-            "A1234567",   # too short
-            "A123456789", # too long
-            "A1234567X",  # letter in number
+    def test_tsn_entry_invalid_format(self, client: TestClient) -> None:
+        """Test TSN entry with invalid format"""
+        invalid_tsns = [
+            "A12345678",  # legacy PID
+            "U12345678",  # legacy PID
+            "12345678",   # too short
+            "1234567890", # too long
+            "12345678X",  # letter in number
         ]
 
-        for invalid_pid in invalid_pids:
+        for invalid_tsn in invalid_tsns:
             response = client.post(
-                "/test-course/enter-pid",
-                data={"pid": invalid_pid},
+                "/test-course/enter-tsn",
+                data={"tsn": invalid_tsn},
                 follow_redirects=False,
             )
 
             # Should reject
             assert response.status_code in [303, 400, 422]
 
-    def test_pid_entry_empty(self, client: TestClient) -> None:
-        """Test PID entry with empty value"""
+    def test_tsn_entry_empty(self, client: TestClient) -> None:
+        """Test TSN entry with empty value"""
         response = client.post(
-            "/test-course/enter-pid",
-            data={"pid": ""},
+            "/test-course/enter-tsn",
+            data={"tsn": ""},
             follow_redirects=False,
         )
 
         assert response.status_code in [400, 422]
 
-    def test_pid_entry_invalid_course(self, client: TestClient) -> None:
-        """Test PID entry for nonexistent course"""
+    def test_tsn_entry_invalid_course(self, client: TestClient) -> None:
+        """Test TSN entry for nonexistent course"""
         response = client.post(
-            "/nonexistent-course/enter-pid",
-            data={"pid": "A12345678"},
+            "/nonexistent-course/enter-tsn",
+            data={"tsn": "112345678"},
             follow_redirects=False,
         )
 
         assert response.status_code == 404
 
-    def test_pid_entry_creates_valid_cookie(
+    def test_tsn_entry_creates_valid_cookie(
         self, client: TestClient, test_settings: Settings
     ) -> None:
-        """Test that PID entry creates a valid, verifiable cookie"""
+        """Test that TSN entry creates a valid, verifiable cookie"""
         response = client.post(
-            "/test-course/enter-pid",
-            data={"pid": "A12345678"},
+            "/test-course/enter-tsn",
+            data={"tsn": "112345678"},
             follow_redirects=False,
         )
 
@@ -292,9 +292,9 @@ class TestPIDEntry:
         assert cookie is not None
 
         # Cookie should be verifiable
-        from app.auth import verify_pid_cookie
-        pid = verify_pid_cookie(cookie, test_settings.secret_key)
-        assert pid == "A12345678"
+        from app.auth import verify_tsn_cookie
+        tsn = verify_tsn_cookie(cookie, test_settings.secret_key)
+        assert tsn == "112345678"
 
 
 class TestCSRFProtection:
@@ -312,15 +312,15 @@ class TestCSRFProtection:
         # Should work (CSRF might not be required for initial login)
         assert response.status_code in [303, 401]
 
-    def test_pid_entry_without_csrf_accepted(self, client: TestClient) -> None:
-        """Test that PID entry works without CSRF (no sensitive state changes)"""
+    def test_tsn_entry_without_csrf_accepted(self, client: TestClient) -> None:
+        """Test that TSN entry works without CSRF (no sensitive state changes)"""
         response = client.post(
-            "/test-course/enter-pid",
-            data={"pid": "A12345678"},
+            "/test-course/enter-tsn",
+            data={"tsn": "112345678"},
             follow_redirects=False,
         )
 
-        # Should work (CSRF might not be required for PID entry)
+        # Should work (CSRF might not be required for TSN entry)
         assert response.status_code in [303, 400, 422]
 
 
@@ -335,13 +335,13 @@ class TestUnauthorizedAccess:
         # Should show login form
         assert b"secret" in response.content.lower()
 
-    def test_student_without_pid_shows_entry(self, client: TestClient) -> None:
-        """Test that accessing student page without PID shows entry form"""
+    def test_student_without_tsn_shows_entry(self, client: TestClient) -> None:
+        """Test that accessing student page without TSN shows entry form"""
         response = client.get("/test-course")
 
         assert response.status_code == 200
-        # Should show PID entry
-        assert b"pid" in response.content.lower()
+        # Should show TSN entry
+        assert b"tsn" in response.content.lower()
 
     def test_invalid_admin_cookie_blocked(self, client: TestClient) -> None:
         """Test that invalid admin cookie is blocked"""
@@ -353,18 +353,18 @@ class TestUnauthorizedAccess:
         # Should show login or reject
         assert response.status_code in [200, 303, 403]
 
-    def test_invalid_pid_cookie_shows_entry(
+    def test_invalid_tsn_cookie_shows_entry(
         self, client: TestClient
     ) -> None:
-        """Test that invalid PID cookie shows PID entry"""
+        """Test that invalid TSN cookie shows TSN entry"""
         response = client.get(
             "/test-course",
             cookies={"student_session": "invalid-cookie"},
         )
 
         assert response.status_code == 200
-        # Should show PID entry again
-        assert b"pid" in response.content.lower()
+        # Should show TSN entry again
+        assert b"tsn" in response.content.lower()
 
 
 class TestTemplateRendering:
@@ -394,7 +394,7 @@ class TestTemplateRendering:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test that student page includes HTMX"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         response = client.get(
             "/test-course",
@@ -409,7 +409,7 @@ class TestTemplateRendering:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test that pages include TailwindCSS"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         response = client.get(
             "/test-course",
@@ -424,7 +424,7 @@ class TestTemplateRendering:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test that pages have responsive meta tag"""
-        cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         response = client.get(
             "/test-course",
@@ -462,11 +462,11 @@ class TestEdgeCases:
         # Should handle gracefully
         assert response.status_code in [404, 400, 414]
 
-    def test_pid_with_sql_injection_attempt(self, client: TestClient) -> None:
-        """Test PID entry with SQL injection attempt"""
+    def test_tsn_with_sql_injection_attempt(self, client: TestClient) -> None:
+        """Test TSN entry with SQL injection attempt"""
         response = client.post(
-            "/test-course/enter-pid",
-            data={"pid": "A12345678' OR '1'='1"},
+            "/test-course/enter-tsn",
+            data={"tsn": "112345678' OR '1'='1"},
             follow_redirects=False,
         )
 

@@ -15,7 +15,7 @@ This test file covers:
 
 from fastapi.testclient import TestClient
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 from app.models import QuestionType
 
@@ -45,10 +45,10 @@ class TestDistributionEndpoint:
         )
 
         # Submit some answers
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345679", "B")
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345680", "A")
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345681", "C")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345679", "B")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345680", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345681", "C")
 
         # Get distribution
         response = client.get(
@@ -88,9 +88,9 @@ class TestDistributionEndpoint:
         qid = redis_client_wrapper.create_question("test-course", QuestionType.TF)
 
         # Submit answers
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", True)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345679", False)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345680", True)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", True)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345679", False)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345680", True)
 
         # Get distribution
         response = client.get(
@@ -130,10 +130,10 @@ class TestDistributionEndpoint:
         qid = redis_client_wrapper.create_question("test-course", QuestionType.NUMERIC)
 
         # Submit numeric answers
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", 42)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345679", 3.14)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345680", 42)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345681", 100)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", 42)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345679", 3.14)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345680", 42)
+        redis_client_wrapper.submit_answer("test-course", qid, "112345681", 100)
 
         # Get distribution
         response = client.get(
@@ -276,7 +276,7 @@ class TestDistributionEndpoint:
         )
 
         # Submit initial answer
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Get initial distribution
         response1 = client.get(
@@ -290,7 +290,7 @@ class TestDistributionEndpoint:
         assert data1["counts"]["B"] == 0
 
         # Change answer
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "B")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "B")
 
         # Get updated distribution
         response2 = client.get(

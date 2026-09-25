@@ -8,7 +8,7 @@ import json
 import pytest
 import redis.asyncio as aioredis
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 from app.models import EventType
 from app.redis_client import RedisClient
@@ -22,7 +22,7 @@ async def test_sse_stream_format(test_settings: Settings, redis_client) -> None:
     from app.routes.sse import event_generator
 
     # Set up test data
-    student_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+    student_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
     # Start session
     redis_wrapper = RedisClient(redis_client)

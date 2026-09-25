@@ -10,7 +10,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 import app.config
-from app.auth import require_admin, require_pid
+from app.auth import require_admin, require_tsn
 from app.models import EventType
 
 router = APIRouter()
@@ -25,12 +25,12 @@ def verify_admin_auth(
     require_admin(admin_session, course, app.config.settings)
 
 
-# Dependency to verify PID authentication
-def verify_pid_auth(
+# Dependency to verify TSN authentication
+def verify_tsn_auth(
     student_session: Annotated[str | None, Cookie()] = None,
 ) -> str:
-    """Verify PID authentication and return PID"""
-    return require_pid(student_session, app.config.settings.secret_key)
+    """Verify TSN authentication and return TSN"""
+    return require_tsn(student_session, app.config.settings.secret_key)
 
 
 async def event_generator(
@@ -125,7 +125,7 @@ async def admin_sse_stream(
 @router.get("/sse/student/{course}")
 async def student_sse_stream(
     course: str,
-    _: Annotated[str, Depends(verify_pid_auth)],
+    _: Annotated[str, Depends(verify_tsn_auth)],
 ) -> StreamingResponse:
     """
     SSE stream for students (filters out counts_updated events)

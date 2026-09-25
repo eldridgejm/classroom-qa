@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from redis import Redis
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 from app.redis_client import RedisClient
 
@@ -37,7 +37,7 @@ class TestCompleteFlow:
         admin_cookie = create_admin_cookie(
             "test-course", course.secret, test_settings.secret_key
         )
-        student_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        student_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # 1. Admin starts session
         response = client.post(
@@ -108,7 +108,7 @@ class TestCompleteFlow:
         admin_cookie = create_admin_cookie(
             "test-course", course.secret, test_settings.secret_key
         )
-        student_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        student_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Start session
         response = client.post(
@@ -158,7 +158,7 @@ class TestCompleteFlow:
         admin_cookie = create_admin_cookie(
             "test-course", course.secret, test_settings.secret_key
         )
-        student_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        student_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Start session
         response = client.post(

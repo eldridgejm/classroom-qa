@@ -3,20 +3,20 @@ Tests for student Ask routes (Phase 10)
 
 This test file covers:
 - Question submission
-- Rate limiting (1 question per 10 seconds per PID)
+- Rate limiting (1 question per 10 seconds per TSN)
 - Length validation (max 1000 chars)
-- PID stripping from question text
+- TSN stripping from question text
 - Question storage in Redis
 - Question retrieval for admin
 - Question TTL (expire after 30 minutes)
-- Unauthorized submission blocked (no PID cookie)
+- Unauthorized submission blocked (no TSN cookie)
 """
 
 import time
 
 from fastapi.testclient import TestClient
 
-from app.auth import create_pid_cookie
+from app.auth import create_tsn_cookie
 from app.config import Settings
 from app.models import EventType
 
@@ -33,8 +33,8 @@ class TestAskSubmission:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        # Create PID cookie
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        # Create TSN cookie
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Start session first
         redis_client_wrapper = RedisClient(redis_client)
@@ -44,7 +44,7 @@ class TestAskSubmission:
         response = client.post(
             "/test-course/ask",
             data={"question": "What is the meaning of life?"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 200
@@ -52,39 +52,39 @@ class TestAskSubmission:
         assert data["status"] == "success"
         assert "question_id" in data
 
-    def test_submit_question_strips_pid(
+    def test_submit_question_strips_tsn(
         self, client: TestClient, test_settings: Settings, redis_client
     ) -> None:
-        """Test that PIDs are stripped from question text"""
+        """Test that TSNs are stripped from question text"""
         from app.redis_client import RedisClient
 
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
 
-        # Submit question with PID embedded
-        question_text = "My PID is A12345678 and I have a question about A98765432"
+        # Submit question with TSN embedded
+        question_text = "My TSN is 112345678 and I have a question about 198765432"
         response = client.post(
             "/test-course/ask",
             data={"question": question_text},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 200
         data = response.json()
         question_id = data["question_id"]
 
-        # Verify PID was stripped in stored question
+        # Verify TSN was stripped in stored question
         stored_question = redis_client_wrapper.get_question("test-course", question_id)
         assert stored_question is not None
-        # PIDs should be replaced with [PID]
-        assert "A12345678" not in stored_question["question"]
-        assert "A98765432" not in stored_question["question"]
-        assert "[PID]" in stored_question["question"]
+        # TSNs should be replaced with [TSN]
+        assert "112345678" not in stored_question["question"]
+        assert "198765432" not in stored_question["question"]
+        assert "[TSN]" in stored_question["question"]
 
     def test_submit_question_too_long(
         self, client: TestClient, test_settings: Settings, redis_client
@@ -95,7 +95,7 @@ class TestAskSubmission:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -105,7 +105,7 @@ class TestAskSubmission:
         response = client.post(
             "/test-course/ask",
             data={"question": question_text},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 422
@@ -121,7 +121,7 @@ class TestAskSubmission:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -131,7 +131,7 @@ class TestAskSubmission:
         response = client.post(
             "/test-course/ask",
             data={"question": question_text},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 200
@@ -139,13 +139,13 @@ class TestAskSubmission:
     def test_submit_question_rate_limit(
         self, client: TestClient, test_settings: Settings, redis_client
     ) -> None:
-        """Test rate limiting: 1 question per 10 seconds per PID"""
+        """Test rate limiting: 1 question per 10 seconds per TSN"""
         from app.redis_client import RedisClient
 
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -154,7 +154,7 @@ class TestAskSubmission:
         response1 = client.post(
             "/test-course/ask",
             data={"question": "First question"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
         assert response1.status_code == 200
 
@@ -162,41 +162,41 @@ class TestAskSubmission:
         response2 = client.post(
             "/test-course/ask",
             data={"question": "Second question"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
         assert response2.status_code == 429  # Too Many Requests
         data = response2.json()
         assert "retry_after" in data
         assert data["retry_after"] > 0
 
-    def test_submit_question_rate_limit_different_pids(
+    def test_submit_question_rate_limit_different_tsns(
         self, client: TestClient, test_settings: Settings, redis_client
     ) -> None:
-        """Test that rate limiting is per-PID (different PIDs don't interfere)"""
+        """Test that rate limiting is per-TSN (different TSNs don't interfere)"""
         from app.redis_client import RedisClient
 
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie1 = create_pid_cookie("A12345678", test_settings.secret_key)
-        pid_cookie2 = create_pid_cookie("A87654321", test_settings.secret_key)
+        tsn_cookie1 = create_tsn_cookie("112345678", test_settings.secret_key)
+        tsn_cookie2 = create_tsn_cookie("187654321", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
 
-        # Submit question from PID 1
+        # Submit question from TSN 1
         response1 = client.post(
             "/test-course/ask",
-            data={"question": "Question from PID 1"},
-            cookies={"student_session": pid_cookie1},
+            data={"question": "Question from TSN 1"},
+            cookies={"student_session": tsn_cookie1},
         )
         assert response1.status_code == 200
 
-        # Submit question from PID 2 immediately (should succeed)
+        # Submit question from TSN 2 immediately (should succeed)
         response2 = client.post(
             "/test-course/ask",
-            data={"question": "Question from PID 2"},
-            cookies={"student_session": pid_cookie2},
+            data={"question": "Question from TSN 2"},
+            cookies={"student_session": tsn_cookie2},
         )
         assert response2.status_code == 200
 
@@ -209,7 +209,7 @@ class TestAskSubmission:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -218,7 +218,7 @@ class TestAskSubmission:
         response1 = client.post(
             "/test-course/ask",
             data={"question": "First question"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
         assert response1.status_code == 200
 
@@ -229,14 +229,14 @@ class TestAskSubmission:
         response2 = client.post(
             "/test-course/ask",
             data={"question": "Second question"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
         assert response2.status_code == 200
 
     def test_submit_question_no_auth(
         self, client: TestClient, test_settings: Settings
     ) -> None:
-        """Test that question submission without PID cookie is blocked"""
+        """Test that question submission without TSN cookie is blocked"""
         response = client.post(
             "/test-course/ask",
             data={"question": "Unauthorized question"},
@@ -248,14 +248,14 @@ class TestAskSubmission:
         self, client: TestClient, test_settings: Settings
     ) -> None:
         """Test that questions can't be submitted when session is not live"""
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         # Don't start session
 
         response = client.post(
             "/test-course/ask",
             data={"question": "Question without session"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 400
@@ -271,7 +271,7 @@ class TestAskSubmission:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -279,7 +279,7 @@ class TestAskSubmission:
         response = client.post(
             "/test-course/ask",
             data={"question": "Timestamped question"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 200
@@ -341,13 +341,13 @@ class TestAdminQuestionView:
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
 
-        # Submit three questions from different PIDs (to avoid rate limiting)
+        # Submit three questions from different TSNs (to avoid rate limiting)
         for i in range(3):
-            pid_cookie = create_pid_cookie(f"A1234567{i}", test_settings.secret_key)
+            tsn_cookie = create_tsn_cookie(f"11234567{i}", test_settings.secret_key)
             client.post(
                 "/test-course/ask",
                 data={"question": f"Question {i + 1}"},
-                cookies={"student_session": pid_cookie},
+                cookies={"student_session": tsn_cookie},
             )
             time.sleep(0.1)  # Ensure different timestamps
 
@@ -366,7 +366,7 @@ class TestAdminQuestionView:
             assert "question_id" in question
             assert "question" in question
             assert "timestamp" in question
-            assert "pid" in question
+            assert "tsn" in question
 
         # Verify sorted by timestamp (newest first)
         timestamps = [q["timestamp"] for q in data]
@@ -389,7 +389,7 @@ class TestAdminQuestionView:
         course = test_settings.get_course("test-course")
         assert course is not None
 
-        pid_cookie = create_pid_cookie("A12345678", test_settings.secret_key)
+        tsn_cookie = create_tsn_cookie("112345678", test_settings.secret_key)
 
         redis_client_wrapper = RedisClient(redis_client)
         redis_client_wrapper.start_session("test-course")
@@ -398,7 +398,7 @@ class TestAdminQuestionView:
         response = client.post(
             "/test-course/ask",
             data={"question": "Question with TTL"},
-            cookies={"student_session": pid_cookie},
+            cookies={"student_session": tsn_cookie},
         )
 
         assert response.status_code == 200

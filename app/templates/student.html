@@ -11,13 +11,13 @@
                 <p class="text-gray-600 mt-1">Student View</p>
             </div>
             <div class="text-right">
-                <p class="text-sm text-gray-500 mb-1">Your PID:</p>
+                <p class="text-sm text-gray-500 mb-1">Your TSN:</p>
                 <button
-                    id="pid-display"
-                    onclick="showChangePIDModal()"
+                    id="tsn-display"
+                    onclick="showChangeTSNModal()"
                     class="px-3 py-1 bg-blue-50 text-blue-900 font-mono text-sm rounded border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition cursor-pointer"
-                    title="Click to change PID">
-                    {{ pid }}
+                    title="Click to change TSN">
+                    {{ tsn }}
                 </button>
                 <p class="text-xs text-gray-400 mt-1">Click to change</p>
             </div>
@@ -224,14 +224,14 @@
         </div>
     </div>
 
-    <!-- Change PID Modal (hidden by default) -->
-    <div id="change-pid-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <!-- Change TSN Modal (hidden by default) -->
+    <div id="change-tsn-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div class="mt-3">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-medium text-gray-900">Change PID</h3>
+                    <h3 class="text-lg font-medium text-gray-900">Change TSN</h3>
                     <button
-                        onclick="hideChangePIDModal()"
+                        onclick="hideChangeTSNModal()"
                         class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -239,24 +239,25 @@
                     </button>
                 </div>
 
-                <form id="change-pid-form" method="POST" action="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/enter-pid">
+                <form id="change-tsn-form" method="POST" action="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/enter-tsn">
                     <div class="mb-4">
-                        <label for="new-pid" class="block text-sm font-medium text-gray-700 mb-2">
-                            Enter your new PID:
+                        <label for="new-tsn" class="block text-sm font-medium text-gray-700 mb-2">
+                            Enter your new TSN:
                         </label>
                         <input
                             type="text"
-                            id="new-pid"
-                            name="pid"
-                            placeholder="A12345678"
-                            pattern="[AU]\d{8}"
+                            id="new-tsn"
+                            name="tsn"
+                            placeholder="123456789"
+                            pattern="\d{9}"
+                            inputmode="numeric"
                             maxlength="9"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                             required>
-                        <p class="text-xs text-gray-500 mt-1">Format: A or U followed by 8 digits</p>
+                        <p class="text-xs text-gray-500 mt-1">Format: 9 digits</p>
                     </div>
 
-                    <div id="pid-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                    <div id="tsn-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                         <!-- Error message will be inserted here -->
                     </div>
 
@@ -264,11 +265,11 @@
                         <button
                             type="submit"
                             class="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
-                            Change PID
+                            Change TSN
                         </button>
                         <button
                             type="button"
-                            onclick="hideChangePIDModal()"
+                            onclick="hideChangeTSNModal()"
                             class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-medium">
                             Cancel
                         </button>
@@ -276,7 +277,7 @@
                 </form>
 
                 <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                    <p><strong>Note:</strong> Changing your PID will reload the page with your new PID.</p>
+                    <p><strong>Note:</strong> Changing your TSN will reload the page with your new TSN.</p>
                 </div>
             </div>
         </div>
@@ -884,30 +885,30 @@
         }
     }
 
-    // PID change modal functions
-    function showChangePIDModal() {
-        document.getElementById('change-pid-modal').classList.remove('hidden');
-        document.getElementById('new-pid').focus();
-        document.getElementById('pid-error').classList.add('hidden');
+    // TSN change modal functions
+    function showChangeTSNModal() {
+        document.getElementById('change-tsn-modal').classList.remove('hidden');
+        document.getElementById('new-tsn').focus();
+        document.getElementById('tsn-error').classList.add('hidden');
     }
 
-    function hideChangePIDModal() {
-        document.getElementById('change-pid-modal').classList.add('hidden');
-        document.getElementById('new-pid').value = '';
-        document.getElementById('pid-error').classList.add('hidden');
+    function hideChangeTSNModal() {
+        document.getElementById('change-tsn-modal').classList.add('hidden');
+        document.getElementById('new-tsn').value = '';
+        document.getElementById('tsn-error').classList.add('hidden');
     }
 
     // Close modal when clicking outside
-    document.getElementById('change-pid-modal').addEventListener('click', function(e) {
+    document.getElementById('change-tsn-modal').addEventListener('click', function(e) {
         if (e.target === this) {
-            hideChangePIDModal();
+            hideChangeTSNModal();
         }
     });
 
     // Close modal on Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            hideChangePIDModal();
+            hideChangeTSNModal();
         }
     });
 </script>

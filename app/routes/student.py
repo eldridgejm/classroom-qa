@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, field_validator
 
 import app.config
-from app.auth import create_pid_cookie, require_pid, validate_pid_format, verify_pid_cookie
+from app.auth import create_tsn_cookie, require_tsn, validate_tsn_format, verify_tsn_cookie
 from app.models import EventType, QuestionType
 from app.redis_client import RedisClient
 from app.services.distribution import build_distribution
@@ -31,12 +31,12 @@ def get_redis_client() -> RedisClient:
     return RedisClient(redis_conn)
 
 
-# Dependency to verify PID authentication
-def verify_pid_auth(
+# Dependency to verify TSN authentication
+def verify_tsn_auth(
     student_session: Annotated[str | None, Cookie()] = None,
 ) -> str:
-    """Verify PID authentication and return PID"""
-    return require_pid(student_session, app.config.settings.secret_key)
+    """Verify TSN authentication and return TSN"""
+    return require_tsn(student_session, app.config.settings.secret_key)
 
 
 # Request/Response models
@@ -77,18 +77,18 @@ class QuestionResultsResponse(BaseModel):
 @router.get("/{course}", response_class=HTMLResponse)
 async def student_page(request: Request, course: str) -> Response:
     """
-    Student page - shows PID entry if not authenticated, main page if authenticated
+    Student page - shows TSN entry if not authenticated, main page if authenticated
     """
     # Check if course exists
     course_config = app.config.settings.get_course(course)
     if course_config is None:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Check if student has PID cookie
-    pid_cookie = request.cookies.get("student_session")
-    pid = verify_pid_cookie(pid_cookie, app.config.settings.secret_key)
+    # Check if student has TSN cookie
+    tsn_cookie = request.cookies.get("student_session")
+    tsn = verify_tsn_cookie(tsn_cookie, app.config.settings.secret_key)
 
-    if pid is not None:
+    if tsn is not None:
         # Check if session is live
         import redis
         redis_conn = redis.from_url(app.config.settings.redis_url, decode_responses=True)
@@ -111,7 +111,7 @@ async def student_page(request: Request, course: str) -> Response:
                         "options": question_meta.get("options"),
                     }
                     # Get student's previous answer if any
-                    response = redis_wrapper.get_response(course, current_qid, pid)
+                    response = redis_wrapper.get_response(course, current_qid, tsn)
                     if response:
                         student_answer = response.get("resp")
 
@@ -124,17 +124,17 @@ async def student_page(request: Request, course: str) -> Response:
             context={
                 "course_name": course_config.name,
                 "course_slug": course,
-                "pid": pid,
+                "tsn": tsn,
                 "session_is_live": session_is_live,
                 "current_question": current_question,
                 "student_answer": student_answer,
             },
         )
     else:
-        # Show PID entry page
+        # Show TSN entry page
         return templates.TemplateResponse(
             request=request,
-            name="pid_entry.html",
+            name="tsn_entry.html",
             context={
                 "course_name": course_config.name,
                 "course_slug": course,
@@ -143,36 +143,37 @@ async def student_page(request: Request, course: str) -> Response:
         )
 
 
-@router.post("/{course}/enter-pid")
-async def enter_pid(
+@router.post("/{course}/enter-tsn")
+async def enter_tsn(
     request: Request,
     course: str,
-    pid: str = Form(...),
+    tsn: str = Form(...),
 ) -> Response:
     """
-    PID entry endpoint - validates PID format and sets cookie
+    TSN entry endpoint - validates TSN format and sets cookie
     """
     # Check if course exists
     course_config = app.config.settings.get_course(course)
     if course_config is None:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Validate PID format
-    if not validate_pid_format(pid):
-        # Return to PID entry page with error
+    # Validate TSN format (ignoring stray whitespace from copy/paste)
+    tsn = tsn.strip()
+    if not validate_tsn_format(tsn):
+        # Return to TSN entry page with error
         return templates.TemplateResponse(
             request=request,
-            name="pid_entry.html",
+            name="tsn_entry.html",
             context={
                 "course_name": course_config.name,
                 "course_slug": course,
-                "error": "Invalid PID format. Must be A or U followed by 8 digits (e.g., A12345678 or U12345678)",
+                "error": "Invalid TSN format. Must be exactly 9 digits (e.g., 123456789)",
             },
             status_code=400,
         )
 
-    # Create PID cookie
-    cookie = create_pid_cookie(pid, app.config.settings.secret_key)
+    # Create TSN cookie
+    cookie = create_tsn_cookie(tsn, app.config.settings.secret_key)
 
     # Redirect to student page (include root_path for subpath deployments)
     root_path = request.scope.get("root_path", "")
@@ -198,7 +199,7 @@ async def enter_pid(
 async def submit_answer(
     request: Request,
     course: str,
-    pid: Annotated[str, Depends(verify_pid_auth)],
+    tsn: Annotated[str, Depends(verify_tsn_auth)],
     redis_client: Annotated[RedisClient, Depends(get_redis_client)],
 ) -> AnswerSubmitResponse:
     """
@@ -316,7 +317,7 @@ async def submit_answer(
             )
 
     # Submit answer using atomic Lua script
-    counts = redis_client.submit_answer(course, qid, pid, response_value)
+    counts = redis_client.submit_answer(course, qid, tsn, response_value)
 
     # Publish SSE event with updated counts (admin only)
     redis_client.publish_event(
@@ -335,7 +336,7 @@ async def submit_answer(
 async def get_shared_results(
     course: str,
     qid: str,
-    pid: Annotated[str, Depends(verify_pid_auth)],
+    tsn: Annotated[str, Depends(verify_tsn_auth)],
     redis_client: Annotated[RedisClient, Depends(get_redis_client)],
 ) -> QuestionResultsResponse:
     """Return shared distribution data along with the student's answer."""
@@ -355,7 +356,7 @@ async def get_shared_results(
     if distribution is None:
         raise HTTPException(status_code=404, detail="Question metadata not found")
 
-    response = redis_client.get_response(course, qid, pid)
+    response = redis_client.get_response(course, qid, tsn)
     your_answer = None
     if response is not None:
         your_answer = response.get("resp")
@@ -392,19 +393,19 @@ class RateLimitResponse(BaseModel):
     retry_after: int
 
 
-def strip_pids_from_text(text: str) -> str:
-    """Strip PIDs from text and replace with [PID]"""
+def strip_tsns_from_text(text: str) -> str:
+    """Strip TSNs from text and replace with [TSN]"""
     import re
-    # Match UCSD PID format: A or U followed by 8 digits
-    pattern = r'\b[AU]\d{8}\b'
-    return re.sub(pattern, '[PID]', text)
+    # Match UCSD TSN format: exactly 9 digits
+    pattern = r'\b\d{9}\b'
+    return re.sub(pattern, '[TSN]', text)
 
 
 @router.post("/{course}/ask")
 async def ask_question(
     request: Request,
     course: str,
-    pid: Annotated[str, Depends(verify_pid_auth)],
+    tsn: Annotated[str, Depends(verify_tsn_auth)],
     redis_client: Annotated[RedisClient, Depends(get_redis_client)],
 ) -> AskQuestionResponse:
     """
@@ -423,7 +424,7 @@ async def ask_question(
         )
 
     # Check rate limit
-    allowed, retry_after = redis_client.check_ask_rate_limit(course, pid)
+    allowed, retry_after = redis_client.check_ask_rate_limit(course, tsn)
     if not allowed:
         from fastapi.responses import JSONResponse
         return JSONResponse(
@@ -459,13 +460,13 @@ async def ask_question(
     if len(question_text.strip()) == 0:
         raise HTTPException(status_code=422, detail="Question cannot be empty")
 
-    # Strip PIDs from question text
-    sanitized_question = strip_pids_from_text(question_text)
+    # Strip TSNs from question text
+    sanitized_question = strip_tsns_from_text(question_text)
 
     # Submit question to Redis
     question_id = redis_client.submit_question(
         course=course,
-        pid=pid,
+        tsn=tsn,
         question=sanitized_question,
         ttl=1800,  # 30 minutes
     )
@@ -477,7 +478,7 @@ async def ask_question(
         {
             "question_id": question_id,
             "question": sanitized_question,
-            "pid": pid,
+            "tsn": tsn,
         },
     )
 

@@ -68,7 +68,7 @@ Each question object contains:
 - `options`: Array of answer options (only present for MCQ questions)
 - `started_at`: ISO 8601 timestamp when the question was started
 - `ended_at`: ISO 8601 timestamp when the question was stopped (may be null if still active)
-- `responses`: Object mapping student PIDs to their responses
+- `responses`: Object mapping student TSNs to their responses
 
 Each response contains:
 - `timestamp`: ISO 8601 timestamp when the response was submitted

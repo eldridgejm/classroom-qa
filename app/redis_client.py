@@ -33,12 +33,12 @@ class RedisClient:
             """
             local responses_key = KEYS[1]
             local counts_key = KEYS[2]
-            local pid = ARGV[1]
+            local tsn = ARGV[1]
             local new_answer_json = ARGV[2]
             local new_answer_value = ARGV[3]
 
             -- Get old answer if exists
-            local old_answer_json = redis.call('HGET', responses_key, pid)
+            local old_answer_json = redis.call('HGET', responses_key, tsn)
             if old_answer_json then
                 local old_data = cjson.decode(old_answer_json)
                 local old_value = tostring(old_data.resp)
@@ -52,7 +52,7 @@ class RedisClient:
             end
 
             -- Set new answer
-            redis.call('HSET', responses_key, pid, new_answer_json)
+            redis.call('HSET', responses_key, tsn, new_answer_json)
             redis.call('HINCRBY', counts_key, new_answer_value, 1)
 
             return redis.call('HGETALL', counts_key)
@@ -97,9 +97,9 @@ class RedisClient:
         """Generate Redis key for student question"""
         return f"course:{course}:question:{question_id}"
 
-    def rate_limit_key(self, course: str, pid: str) -> str:
+    def rate_limit_key(self, course: str, tsn: str) -> str:
         """Generate Redis key for Ask rate limiting"""
-        return f"course:{course}:ratelimit:ask:{pid}"
+        return f"course:{course}:ratelimit:ask:{tsn}"
 
     # Session operations
 
@@ -331,7 +331,7 @@ class RedisClient:
         self,
         course: str,
         qid: str,
-        pid: str,
+        tsn: str,
         answer: str | bool | float,
     ) -> dict[str, int]:
         """
@@ -340,7 +340,7 @@ class RedisClient:
         Args:
             course: Course slug
             qid: Question ID
-            pid: Student PID
+            tsn: Student TSN
             answer: Answer value
 
         Returns:
@@ -365,7 +365,7 @@ class RedisClient:
         # Execute atomic update script
         result = self.atomic_answer_script(
             keys=[responses_key, counts_key],
-            args=[pid, answer_json, answer_value],
+            args=[tsn, answer_json, answer_value],
         )
 
         # Convert result to dict
@@ -379,7 +379,7 @@ class RedisClient:
         return counts
 
     def get_response(
-        self, course: str, qid: str, pid: str
+        self, course: str, qid: str, tsn: str
     ) -> dict[str, Any] | None:
         """
         Get a student's response to a question
@@ -387,13 +387,13 @@ class RedisClient:
         Args:
             course: Course slug
             qid: Question ID
-            pid: Student PID
+            tsn: Student TSN
 
         Returns:
             Response data dict or None if not found
         """
         key = self.question_responses_key(course, qid)
-        data = self.redis.hget(key, pid)
+        data = self.redis.hget(key, tsn)
 
         if data is None:
             return None
@@ -409,20 +409,20 @@ class RedisClient:
             qid: Question ID
 
         Returns:
-            Dict mapping PID to response data
+            Dict mapping TSN to response data
         """
         key = self.question_responses_key(course, qid)
         data = self.redis.hgetall(key)
 
         responses = {}
-        for pid_bytes, response_bytes in data.items():
-            pid = pid_bytes.decode() if isinstance(pid_bytes, bytes) else pid_bytes
+        for tsn_bytes, response_bytes in data.items():
+            tsn = tsn_bytes.decode() if isinstance(tsn_bytes, bytes) else tsn_bytes
             response_json = (
                 response_bytes.decode()
                 if isinstance(response_bytes, bytes)
                 else response_bytes
             )
-            responses[pid] = json.loads(response_json)
+            responses[tsn] = json.loads(response_json)
 
         return responses
 
@@ -562,8 +562,8 @@ class RedisClient:
 
             # Format responses
             formatted_responses = {}
-            for pid, response_data in all_responses.items():
-                formatted_responses[pid] = {
+            for tsn, response_data in all_responses.items():
+                formatted_responses[tsn] = {
                     "timestamp": response_data["ts"],
                     "response": response_data["resp"],
                 }
@@ -673,7 +673,7 @@ class RedisClient:
     def submit_question(
         self,
         course: str,
-        pid: str,
+        tsn: str,
         question: str,
         ttl: int = 1800,
     ) -> str:
@@ -682,8 +682,8 @@ class RedisClient:
 
         Args:
             course: Course slug
-            pid: Student PID
-            question: Question text (PID already stripped)
+            tsn: Student TSN
+            question: Question text (TSN already stripped)
             ttl: TTL in seconds (default: 1800 = 30 minutes)
 
         Returns:
@@ -697,7 +697,7 @@ class RedisClient:
         # Create question data
         question_data = {
             "question_id": question_id,
-            "pid": pid,
+            "tsn": tsn,
             "question": question,
             "timestamp": datetime.now(UTC).isoformat(),
         }
@@ -760,19 +760,19 @@ class RedisClient:
 
         return questions
 
-    def check_ask_rate_limit(self, course: str, pid: str, window: int = 10) -> tuple[bool, int]:
+    def check_ask_rate_limit(self, course: str, tsn: str, window: int = 10) -> tuple[bool, int]:
         """
         Check if a student can ask a question (rate limiting)
 
         Args:
             course: Course slug
-            pid: Student PID
+            tsn: Student TSN
             window: Rate limit window in seconds (default: 10)
 
         Returns:
             Tuple of (allowed, retry_after_seconds)
         """
-        key = self.rate_limit_key(course, pid)
+        key = self.rate_limit_key(course, tsn)
 
         # Check if key exists
         if self.redis.exists(key):

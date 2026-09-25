@@ -48,8 +48,8 @@ class TestExportEndpoint:
         )
 
         # Submit some answers
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345679", "B")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345679", "B")
 
         # Export
         response = client.get(
@@ -91,17 +91,17 @@ class TestExportEndpoint:
         qid1 = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345678", "A")
         redis_client_wrapper.stop_question("test-course", qid1)
 
         qid2 = redis_client_wrapper.create_question("test-course", QuestionType.TF)
-        redis_client_wrapper.submit_answer("test-course", qid2, "A12345678", True)
+        redis_client_wrapper.submit_answer("test-course", qid2, "112345678", True)
         redis_client_wrapper.stop_question("test-course", qid2)
 
         qid3 = redis_client_wrapper.create_question(
             "test-course", QuestionType.NUMERIC
         )
-        redis_client_wrapper.submit_answer("test-course", qid3, "A12345678", 42)
+        redis_client_wrapper.submit_answer("test-course", qid3, "112345678", 42)
 
         # Export
         response = client.get(
@@ -138,7 +138,7 @@ class TestExportEndpoint:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Export
         response = client.get(
@@ -150,9 +150,9 @@ class TestExportEndpoint:
         data = response.json()
 
         responses = data[0]["responses"]
-        assert "A12345678" in responses
+        assert "112345678" in responses
 
-        student_response = responses["A12345678"]
+        student_response = responses["112345678"]
         assert "timestamp" in student_response
         assert "response" in student_response
         assert student_response["response"] == "A"
@@ -184,11 +184,11 @@ class TestExportEndpoint:
         )
 
         # Student changes answer multiple times
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
         time.sleep(0.01)  # Ensure different timestamps
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "B")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "B")
         time.sleep(0.01)
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "C")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "C")
 
         # Export
         response = client.get(
@@ -202,7 +202,7 @@ class TestExportEndpoint:
         responses = data[0]["responses"]
         # Should only have one entry per student
         assert len(responses) == 1
-        assert responses["A12345678"]["response"] == "C"
+        assert responses["112345678"]["response"] == "C"
 
     def test_export_no_responses(
         self, client: TestClient, test_settings: Settings, redis_client
@@ -297,17 +297,17 @@ class TestExportEndpoint:
         qid1 = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B", "C"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid1, "A12345678", "B")
+        redis_client_wrapper.submit_answer("test-course", qid1, "112345678", "B")
 
         # T/F
         qid2 = redis_client_wrapper.create_question("test-course", QuestionType.TF)
-        redis_client_wrapper.submit_answer("test-course", qid2, "A12345679", False)
+        redis_client_wrapper.submit_answer("test-course", qid2, "112345679", False)
 
         # Numeric
         qid3 = redis_client_wrapper.create_question(
             "test-course", QuestionType.NUMERIC
         )
-        redis_client_wrapper.submit_answer("test-course", qid3, "A12345680", 3.14)
+        redis_client_wrapper.submit_answer("test-course", qid3, "112345680", 3.14)
 
         # Export
         response = client.get(
@@ -327,13 +327,13 @@ class TestExportEndpoint:
 
         assert mcq["type"] == "mcq"
         assert mcq["options"] == ["A", "B", "C"]
-        assert mcq["responses"]["A12345678"]["response"] == "B"
+        assert mcq["responses"]["112345678"]["response"] == "B"
 
         assert tf["type"] == "tf"
-        assert tf["responses"]["A12345679"]["response"] is False
+        assert tf["responses"]["112345679"]["response"] is False
 
         assert numeric["type"] == "numeric"
-        assert numeric["responses"]["A12345680"]["response"] == 3.14
+        assert numeric["responses"]["112345680"]["response"] == 3.14
 
 
 class TestSessionTTL:
@@ -359,7 +359,7 @@ class TestSessionTTL:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Get keys before stopping
         session_key = redis_client_wrapper.session_key("test-course")
@@ -417,7 +417,7 @@ class TestSessionTTL:
         qid = redis_client_wrapper.create_question(
             "test-course", QuestionType.MCQ, ["A", "B"]
         )
-        redis_client_wrapper.submit_answer("test-course", qid, "A12345678", "A")
+        redis_client_wrapper.submit_answer("test-course", qid, "112345678", "A")
 
         # Stop session
         client.post(
@@ -450,4 +450,4 @@ class TestSessionTTL:
         archive_data = response.json()
         assert len(archive_data["questions"]) == 1
         assert archive_data["questions"][0]["question_id"] == qid
-        assert "A12345678" in archive_data["questions"][0]["responses"]
+        assert "112345678" in archive_data["questions"][0]["responses"]

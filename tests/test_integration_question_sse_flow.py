@@ -15,7 +15,7 @@ import redis.asyncio as aioredis
 from fastapi.testclient import TestClient
 from redis import Redis
 
-from app.auth import create_admin_cookie, create_pid_cookie
+from app.auth import create_admin_cookie, create_tsn_cookie
 from app.config import Settings
 from app.models import EventType
 from app.redis_client import RedisClient
