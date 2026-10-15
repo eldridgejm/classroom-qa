@@ -74,6 +74,43 @@ class QuestionResultsResponse(BaseModel):
     your_answer: str | bool | float | None = None
 
 
+class CurrentQuestion(BaseModel):
+    """The question currently accepting answers"""
+    id: str
+    type: str
+    options: list[str] | None = None
+
+
+class StudentStateResponse(BaseModel):
+    """Current session and question state, for re-syncing the student page"""
+    session_live: bool
+    current_question: CurrentQuestion | None = None
+    your_answer: str | bool | int | float | None = None
+
+
+def get_student_state(redis_client: RedisClient, course: str, tsn: str) -> StudentStateResponse:
+    """Read the live session, current question, and this student's answer from Redis"""
+    session_live = redis_client.is_session_live(course)
+
+    current_question = None
+    your_answer = None
+    if session_live:
+        meta = redis_client.get_active_question(course)
+        if meta is not None:
+            current_question = CurrentQuestion(
+                id=meta["id"], type=meta["type"], options=meta.get("options")
+            )
+            response = redis_client.get_response(course, meta["id"], tsn)
+            if response:
+                your_answer = response.get("resp")
+
+    return StudentStateResponse(
+        session_live=session_live,
+        current_question=current_question,
+        your_answer=your_answer,
+    )
+
+
 @router.get("/{course}", response_class=HTMLResponse)
 async def student_page(request: Request, course: str) -> Response:
     """
@@ -93,28 +130,7 @@ async def student_page(request: Request, course: str) -> Response:
         import redis
         redis_conn = redis.from_url(app.config.settings.redis_url, decode_responses=True)
         redis_wrapper = RedisClient(redis_conn)
-        session_is_live = redis_wrapper.is_session_live(course)
-
-        # Check if there's a current question
-        current_question = None
-        student_answer = None
-
-        if session_is_live:
-            current_qid = redis_wrapper.get_current_question(course)
-            if current_qid:
-                question_meta = redis_wrapper.get_question_meta(course, current_qid)
-                # Only show the question if it hasn't ended yet
-                if question_meta and question_meta.get("ended_at") is None:
-                    current_question = {
-                        "id": current_qid,
-                        "type": question_meta["type"],
-                        "options": question_meta.get("options"),
-                    }
-                    # Get student's previous answer if any
-                    response = redis_wrapper.get_response(course, current_qid, tsn)
-                    if response:
-                        student_answer = response.get("resp")
-
+        state = get_student_state(redis_wrapper, course, tsn)
         redis_conn.close()
 
         # Show main student page
@@ -125,9 +141,11 @@ async def student_page(request: Request, course: str) -> Response:
                 "course_name": course_config.name,
                 "course_slug": course,
                 "tsn": tsn,
-                "session_is_live": session_is_live,
-                "current_question": current_question,
-                "student_answer": student_answer,
+                "session_is_live": state.session_live,
+                "current_question": (
+                    state.current_question.model_dump() if state.current_question else None
+                ),
+                "student_answer": state.your_answer,
             },
         )
     else:
@@ -191,6 +209,23 @@ async def enter_tsn(
     )
 
     return response
+
+
+@router.get("/{course}/state")
+async def get_state(
+    course: str,
+    tsn: Annotated[str, Depends(verify_tsn_auth)],
+    redis_client: Annotated[RedisClient, Depends(get_redis_client)],
+) -> StudentStateResponse:
+    """
+    Get the current session and question state, including this student's answer
+    """
+    # Verify course exists
+    course_config = app.config.settings.get_course(course)
+    if course_config is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    return get_student_state(redis_client, course, tsn)
 
 
 # Answer Submission Route

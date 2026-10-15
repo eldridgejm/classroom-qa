@@ -14,6 +14,71 @@
     <!-- HTMX SSE Extension -->
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
 
+    <script>
+        // Open an EventSource that recovers from dropped connections. The server sends
+        // a `ping` event every 15s; if nothing arrives for 40s, or the browser gives up
+        // on the connection, the stream is reopened. `onOpen` runs on every (re)connect
+        // so the page can re-sync any state it missed while disconnected.
+        function createLiveStream(url, onOpen) {
+            const STALE_AFTER_MS = 40000;
+            const handlers = [];
+            let source = null;
+            let lastActivity = Date.now();
+
+            function touch() {
+                lastActivity = Date.now();
+            }
+
+            function connect() {
+                if (source) {
+                    source.close();
+                }
+                touch();
+                source = new EventSource(url);
+                source.addEventListener('open', function() {
+                    touch();
+                    onOpen();
+                });
+                source.addEventListener('ping', touch);
+                source.addEventListener('error', function(event) {
+                    // EventSource retries by itself unless the connection is closed for good
+                    if (event.target.readyState === EventSource.CLOSED && event.target === source) {
+                        setTimeout(connect, 10000);
+                    }
+                });
+                handlers.forEach(([name, handler]) => source.addEventListener(name, handler));
+            }
+
+            setInterval(function() {
+                if (Date.now() - lastActivity > STALE_AFTER_MS) {
+                    console.warn('SSE: stream went quiet, reconnecting');
+                    connect();
+                }
+            }, 5000);
+
+            // Phones suspend background pages, so check the stream as soon as the page is visible again
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && Date.now() - lastActivity > 20000) {
+                    console.warn('SSE: page visible again after a quiet period, reconnecting');
+                    connect();
+                }
+            });
+
+            connect();
+
+            return {
+                addEventListener(name, handler) {
+                    const wrapped = function(event) {
+                        touch();
+                        handler(event);
+                    };
+                    handlers.push([name, wrapped]);
+                    source.addEventListener(name, wrapped);
+                },
+            };
+        }
+    </script>
+
     <style>
         /* Custom styles */
         .pane {

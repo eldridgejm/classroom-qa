@@ -149,14 +149,14 @@ class RedisClient:
 
         Args:
             course: Course slug
-            ttl: Optional TTL in seconds for archived session (default: 86400 = 24 hours)
+            ttl: Optional TTL in seconds for archived session (default: 172800 = 48 hours)
 
         Returns:
             Session ID of archived session
         """
-        # Default TTL to 24 hours if not specified
+        # Default TTL to 48 hours if not specified
         if ttl is None:
-            ttl = 86400
+            ttl = 172800
 
         # Archive current session
         session_id = self.archive_session(course, ttl)
@@ -227,6 +227,26 @@ class RedisClient:
         key = self.current_qid_key(course)
         self.redis.delete(key)
 
+    def get_active_question(self, course: str) -> dict[str, Any] | None:
+        """
+        Get metadata for the current question if it is still accepting answers
+
+        Args:
+            course: Course slug
+
+        Returns:
+            Question metadata dict, or None if no question is active
+        """
+        qid = self.get_current_question(course)
+        if qid is None:
+            return None
+
+        meta = self.get_question_meta(course, qid)
+        if meta is None or meta.get("ended_at") is not None:
+            return None
+
+        return meta
+
     # Question metadata operations
 
     def create_question(
@@ -237,6 +257,7 @@ class RedisClient:
     ) -> str:
         """
         Create a new question
+        Ends the previous question first if it is still active.
 
         Args:
             course: Course slug
@@ -246,6 +267,11 @@ class RedisClient:
         Returns:
             Question ID
         """
+        # End the previous question so it doesn't stay open forever
+        previous_qid = self.get_current_question(course)
+        if previous_qid is not None:
+            self.stop_question(course, previous_qid)
+
         # Generate unique question ID
         qid = f"q-{uuid.uuid4()}"
 
@@ -298,7 +324,7 @@ class RedisClient:
         """
         # Update metadata with ended_at timestamp
         meta = self.get_question_meta(course, qid)
-        if meta is not None:
+        if meta is not None and meta.get("ended_at") is None:
             meta["ended_at"] = datetime.now(UTC).isoformat()
             key = self.question_meta_key(course, qid)
             self.redis.set(key, json.dumps(meta))
@@ -523,13 +549,13 @@ class RedisClient:
 
     # Archive operations
 
-    def archive_session(self, course: str, ttl: int = 86400) -> str:
+    def archive_session(self, course: str, ttl: int = 172800) -> str:
         """
         Archive current session data
 
         Args:
             course: Course slug
-            ttl: TTL in seconds for archived session (default: 86400 = 24 hours)
+            ttl: TTL in seconds for archived session (default: 172800 = 48 hours)
 
         Returns:
             Session ID of archived session

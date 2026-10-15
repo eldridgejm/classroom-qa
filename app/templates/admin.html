@@ -172,7 +172,32 @@
     window.addEventListener('DOMContentLoaded', function() {
         updateSessionUI();
         initializeAutoShareToggle();
+
+        // Restore the active question if there is one (for page refresh)
+        const initialQuestion = {{ current_question | tojson if current_question else 'null' }};
+        if (initialQuestion) {
+            showCurrentQuestion(initialQuestion.id, initialQuestion.type, initialQuestion.options);
+        }
     });
+
+    // Report a failed HTMX request. An expired login sends the admin back to the login page.
+    function reportRequestFailure(event, action) {
+        const xhr = event.detail.xhr;
+        if (xhr && xhr.status === 401) {
+            alert(`Could not ${action}: your admin login has expired. The page will reload so you can log in again.`);
+            window.location.reload();
+            return;
+        }
+
+        let detail = '';
+        try {
+            detail = JSON.parse(xhr.responseText).detail || '';
+        } catch (err) {
+            // Ignore JSON parsing issues
+        }
+        const status = xhr && xhr.status ? ` (HTTP ${xhr.status})` : ' (network error)';
+        alert(`Could not ${action}${status}. ${detail}`.trim());
+    }
 
     function initializeAutoShareToggle() {
         try {
@@ -207,6 +232,8 @@
                 sessionIsLive = false;
             }
             updateSessionUI();
+        } else {
+            reportRequestFailure(event, sessionIsLive ? 'stop the session' : 'start the session');
         }
     }
 
@@ -257,76 +284,110 @@
     function handleQuestionCreated(event) {
         if (event.detail.successful) {
             const response = JSON.parse(event.detail.xhr.responseText);
-            const questionId = response.question_id;
 
             // Get question type from request
             // requestConfig.parameters is already an object, no need to parse
             const requestBody = event.detail.requestConfig.parameters;
-            const questionType = requestBody.type;
-            const options = requestBody.options;
-
-            // Update current question display
-            document.getElementById('current-question-id').textContent = questionId;
-
-            let typeDisplay = '';
-            let optionsDisplay = '';
-
-            if (questionType === 'mcq') {
-                typeDisplay = 'Multiple Choice Question';
-                optionsDisplay = 'Options: ' + options.join(', ');
-            } else if (questionType === 'tf') {
-                typeDisplay = 'True/False Question';
-                optionsDisplay = '';
-            } else if (questionType === 'numeric') {
-                typeDisplay = 'Numeric Question';
-                optionsDisplay = '';
-            }
-
-            document.getElementById('question-type-display').textContent = typeDisplay;
-            document.getElementById('question-options-display').textContent = optionsDisplay;
-
-            // Set stop button URL
-            const stopBtn = document.getElementById('stop-question-btn');
-            stopBtn.setAttribute(
-                'hx-post',
-                `${rootPath}/{{ course_slug }}/admin/question/${questionId}/stop`
-            );
-            stopBtn.dataset.questionId = questionId;
-            // Re-process with HTMX to recognize new attributes
-            htmx.process(stopBtn);
-
-            // Fetch and display distribution (this will show the distribution section)
-            updateDistributionOnQuestionStart();
+            showCurrentQuestion(response.question_id, requestBody.type, requestBody.options);
+        } else {
+            reportRequestFailure(event, 'start the question');
         }
+    }
+
+    // Show a question as the current one and start displaying its distribution
+    function showCurrentQuestion(questionId, questionType, options) {
+        // Update current question display
+        document.getElementById('current-question-id').textContent = questionId;
+
+        let typeDisplay = '';
+        let optionsDisplay = '';
+
+        if (questionType === 'mcq') {
+            typeDisplay = 'Multiple Choice Question';
+            optionsDisplay = 'Options: ' + (options || []).join(', ');
+        } else if (questionType === 'tf') {
+            typeDisplay = 'True/False Question';
+            optionsDisplay = '';
+        } else if (questionType === 'numeric') {
+            typeDisplay = 'Numeric Question';
+            optionsDisplay = '';
+        }
+
+        document.getElementById('question-type-display').textContent = typeDisplay;
+        document.getElementById('question-options-display').textContent = optionsDisplay;
+
+        // Set stop button URL
+        const stopBtn = document.getElementById('stop-question-btn');
+        stopBtn.setAttribute(
+            'hx-post',
+            `${rootPath}/{{ course_slug }}/admin/question/${questionId}/stop`
+        );
+        stopBtn.dataset.questionId = questionId;
+        // Re-process with HTMX to recognize new attributes
+        htmx.process(stopBtn);
+
+        // Fetch and display distribution (this will show the distribution section)
+        updateDistributionOnQuestionStart();
     }
 
     function handleQuestionStopped(event) {
-        if (event.detail.successful) {
-            // Hide distribution (this will show question creation buttons)
-            updateDistributionOnQuestionStop();
+        if (!event.detail.successful) {
+            reportRequestFailure(event, 'stop the question');
+            return;
+        }
 
-            let questionId = null;
-            try {
-                const responseText = event.detail.xhr?.responseText;
-                if (responseText) {
-                    const data = JSON.parse(responseText);
-                    questionId = data.question_id;
-                }
-            } catch (err) {
-                // Ignore JSON parsing issues
+        // Hide distribution (this will show question creation buttons)
+        updateDistributionOnQuestionStop();
+
+        let questionId = null;
+        try {
+            const responseText = event.detail.xhr?.responseText;
+            if (responseText) {
+                const data = JSON.parse(responseText);
+                questionId = data.question_id;
             }
+        } catch (err) {
+            // Ignore JSON parsing issues
+        }
 
-            if (!questionId) {
-                const stopBtn = document.getElementById('stop-question-btn');
-                questionId = stopBtn?.dataset?.questionId || null;
+        if (!questionId) {
+            const stopBtn = document.getElementById('stop-question-btn');
+            questionId = stopBtn?.dataset?.questionId || null;
+        }
+
+        maybeAutoShareResults(questionId);
+    }
+
+    // Re-sync the dashboard with the server, in case events were missed while disconnected
+    async function resyncState() {
+        try {
+            const response = await fetch(`${rootPath}/{{ course_slug }}/admin/state`);
+            if (response.status === 401) {
+                // Login expired; reloading shows the login page
+                window.location.reload();
+                return;
             }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const state = await response.json();
 
-            maybeAutoShareResults(questionId);
+            sessionIsLive = state.session_live;
+            updateSessionUI();
+
+            const question = state.current_question;
+            if (question) {
+                showCurrentQuestion(question.id, question.type, question.options);
+            } else {
+                hideDistribution();
+            }
+        } catch (error) {
+            console.error('Error re-syncing state:', error);
         }
     }
 
-    // SSE Connection using native EventSource API
-    const eventSource = new EventSource(`${rootPath}/sse/admin/{{ course_slug }}`);
+    // SSE connection that reconnects and re-syncs if it drops
+    const eventSource = createLiveStream(`${rootPath}/sse/admin/{{ course_slug }}`, resyncState);
 
     eventSource.addEventListener('session_started', function(event) {
         console.log('SSE: Session started', event);
@@ -347,39 +408,7 @@
     eventSource.addEventListener('question_started', function(event) {
         console.log('SSE: Question started', event);
         const data = JSON.parse(event.data);
-
-        // Update current question display
-        document.getElementById('current-question-id').textContent = data.question_id;
-
-        let typeDisplay = '';
-        let optionsDisplay = '';
-
-        if (data.type === 'mcq') {
-            typeDisplay = 'Multiple Choice Question';
-            optionsDisplay = 'Options: ' + data.options.join(', ');
-        } else if (data.type === 'tf') {
-            typeDisplay = 'True/False Question';
-            optionsDisplay = '';
-        } else if (data.type === 'numeric') {
-            typeDisplay = 'Numeric Question';
-            optionsDisplay = '';
-        }
-
-        document.getElementById('question-type-display').textContent = typeDisplay;
-        document.getElementById('question-options-display').textContent = optionsDisplay;
-
-        // Set stop button URL
-        const stopBtn = document.getElementById('stop-question-btn');
-        stopBtn.setAttribute(
-            'hx-post',
-            `${rootPath}/{{ course_slug }}/admin/question/${data.question_id}/stop`
-        );
-        stopBtn.dataset.questionId = data.question_id;
-        // Re-process with HTMX to recognize new attributes
-        htmx.process(stopBtn);
-
-        // Show distribution section and fetch data
-        updateDistributionOnQuestionStart();
+        showCurrentQuestion(data.question_id, data.type, data.options);
     });
 
     eventSource.addEventListener('question_stopped', function(event) {

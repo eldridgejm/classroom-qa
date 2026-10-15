@@ -92,8 +92,8 @@ in {
 
     sessionTTL = mkOption {
       type = types.int;
-      default = 86400;
-      description = "Session data TTL in seconds (24 hours)";
+      default = 172800;
+      description = "Session archive TTL in seconds (48 hours)";
     };
   };
 
@@ -171,6 +171,7 @@ in {
         exec ${cfg.package}/bin/classroom-qa-server \
           --host ${cfg.host} \
           --port ${toString cfg.port} \
+          --timeout-graceful-shutdown 5 \
           ${lib.optionalString (cfg.rootPath != "") "--root-path ${cfg.rootPath}"}
       '';
     };

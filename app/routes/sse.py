@@ -15,6 +15,9 @@ from app.models import EventType
 
 router = APIRouter()
 
+# Seconds of silence before the stream sends a heartbeat event
+HEARTBEAT_INTERVAL = 15
+
 
 # Dependency to verify admin authentication
 def verify_admin_auth(
@@ -55,17 +58,32 @@ async def event_generator(
         decode_responses=True,
     )
 
+    pubsub = redis_conn.pubsub()
+    channel = f"course:{course}:events"
+
     try:
         # Subscribe to course events channel
-        pubsub = redis_conn.pubsub()
-        channel = f"course:{course}:events"
         await pubsub.subscribe(channel)
 
         # Send initial comment to keep connection alive
         yield ": connected\n\n"
 
-        # Listen for messages
-        async for message in pubsub.listen():
+        # Listen for messages, sending a heartbeat whenever the channel is quiet.
+        # The heartbeat is a named event (not a comment) so clients can see it
+        # and detect connections that have silently died.
+        loop = asyncio.get_running_loop()
+        last_sent = loop.time()
+        while True:
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=1.0
+            )
+
+            if message is None:
+                if loop.time() - last_sent >= HEARTBEAT_INTERVAL:
+                    last_sent = loop.time()
+                    yield "event: ping\ndata: {}\n\n"
+                continue
+
             if message["type"] == "message":
                 try:
                     # Parse the event
@@ -81,6 +99,7 @@ async def event_generator(
                     sse_event = f"event: {event_type}\n"
                     sse_event += f"data: {json.dumps(data)}\n\n"
 
+                    last_sent = loop.time()
                     yield sse_event
 
                 except (json.JSONDecodeError, KeyError) as e:

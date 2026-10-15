@@ -473,8 +473,8 @@ class TestArchiveTTL:
         archive_key = f"course:test-course:archive:{session_id}"
         ttl = redis_client.ttl(archive_key)
 
-        # Should have TTL set (24 hours = 86400 seconds)
-        assert 86390 < ttl <= 86400
+        # Should have TTL set (48 hours = 172800 seconds)
+        assert 172790 < ttl <= 172800
 
     def test_old_archives_expire(
         self, client: TestClient, test_settings: Settings, redis_client

@@ -696,8 +696,64 @@
         }
     }
 
-    // SSE Connection using native EventSource API
-    const eventSource = new EventSource(`${rootPath}/sse/student/{{ course_slug }}`);
+    // Highlight (or fill in) the answer a student already submitted
+    function restoreStudentAnswer(type, answer) {
+        if (type === 'mcq') {
+            document.querySelectorAll('.mcq-option').forEach(btn => {
+                if (btn.dataset.value === answer) {
+                    btn.classList.add('answer-selected');
+                }
+            });
+        } else if (type === 'tf') {
+            document.querySelectorAll('.tf-option').forEach(btn => {
+                if (btn.dataset.value === answer.toString()) {
+                    btn.classList.add('answer-selected');
+                }
+            });
+        } else if (type === 'numeric') {
+            const input = document.getElementById('numeric-input');
+            if (input) {
+                input.value = answer;
+            }
+        }
+    }
+
+    // Re-sync the page with the server, in case events were missed while disconnected
+    async function resyncState() {
+        try {
+            const response = await fetch(`${rootPath}/{{ course_slug }}/state`);
+            if (response.status === 401) {
+                // Session cookie expired; reloading shows the TSN entry page
+                window.location.reload();
+                return;
+            }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const state = await response.json();
+
+            document.getElementById('session-interface').classList.toggle('hidden', !state.session_live);
+            document.getElementById('session-not-started').classList.toggle('hidden', state.session_live);
+
+            const question = state.current_question;
+            if (question) {
+                // Leave an already-displayed question alone so a half-typed answer isn't wiped
+                if (question.id !== currentQuestionId) {
+                    showQuestion(question.id, question.type, question.options || null);
+                    if (state.your_answer !== null) {
+                        restoreStudentAnswer(question.type, state.your_answer);
+                    }
+                }
+            } else if (currentQuestionId !== null) {
+                handleQuestionEnded();
+            }
+        } catch (error) {
+            console.error('Error re-syncing state:', error);
+        }
+    }
+
+    // SSE connection that reconnects and re-syncs if it drops
+    const eventSource = createLiveStream(`${rootPath}/sse/student/{{ course_slug }}`, resyncState);
 
     eventSource.addEventListener('session_started', function(event) {
         console.log('SSE: Session started', event);
@@ -760,33 +816,7 @@
         // Restore student's previous answer if any
         if (studentAnswer !== null) {
             console.log('Restoring student answer:', studentAnswer);
-            // Highlight the previously selected answer based on question type
-            if (questionData.type === 'mcq') {
-                // Wait for DOM to update after showQuestion
-                setTimeout(() => {
-                    document.querySelectorAll('.mcq-option').forEach(btn => {
-                        if (btn.dataset.value === studentAnswer) {
-                            btn.classList.add('answer-selected');
-                        }
-                    });
-                }, 50);
-            } else if (questionData.type === 'tf') {
-                setTimeout(() => {
-                    document.querySelectorAll('.tf-option').forEach(btn => {
-                        if (btn.dataset.value === studentAnswer.toString()) {
-                            btn.classList.add('answer-selected');
-                        }
-                    });
-                }, 50);
-            } else if (questionData.type === 'numeric') {
-                // For numeric, just fill in the input field
-                setTimeout(() => {
-                    const input = document.getElementById('numeric-answer');
-                    if (input) {
-                        input.value = studentAnswer;
-                    }
-                }, 50);
-            }
+            restoreStudentAnswer(questionData.type, studentAnswer);
         }
     })();
     {% endif %}

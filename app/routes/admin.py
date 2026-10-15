@@ -105,6 +105,34 @@ class DistributionResponse(BaseModel):
     options: list[str] | None = None
 
 
+class CurrentQuestion(BaseModel):
+    """The question currently accepting answers"""
+    id: str
+    type: str
+    options: list[str] | None = None
+
+
+class AdminStateResponse(BaseModel):
+    """Current session and question state, for re-syncing the dashboard"""
+    session_live: bool
+    current_question: CurrentQuestion | None = None
+
+
+def get_admin_state(redis_client: RedisClient, course: str) -> AdminStateResponse:
+    """Read the live session and current question from Redis"""
+    session_live = redis_client.is_session_live(course)
+
+    current_question = None
+    if session_live:
+        meta = redis_client.get_active_question(course)
+        if meta is not None:
+            current_question = CurrentQuestion(
+                id=meta["id"], type=meta["type"], options=meta.get("options")
+            )
+
+    return AdminStateResponse(session_live=session_live, current_question=current_question)
+
+
 class QuestionResultsShareResponse(BaseModel):
     """Response for sharing results with students"""
     status: str
@@ -130,7 +158,7 @@ async def admin_page(request: Request, course: str) -> Response:
         import redis
         redis_conn = redis.from_url(app.config.settings.redis_url, decode_responses=True)
         redis_wrapper = RedisClient(redis_conn)
-        session_is_live = redis_wrapper.is_session_live(course)
+        state = get_admin_state(redis_wrapper, course)
         redis_conn.close()
 
         # Show admin dashboard
@@ -140,7 +168,10 @@ async def admin_page(request: Request, course: str) -> Response:
             context={
                 "course_name": course_config.name,
                 "course_slug": course,
-                "session_is_live": session_is_live,
+                "session_is_live": state.session_live,
+                "current_question": (
+                    state.current_question.model_dump() if state.current_question else None
+                ),
             },
         )
     else:
@@ -244,13 +275,30 @@ async def stop_session(
     if course_config is None:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Stop session in Redis with 24 hour TTL
-    redis_client.stop_session(course, ttl=86400)
+    # Stop session in Redis, keeping the archive for the configured TTL
+    redis_client.stop_session(course, ttl=app.config.settings.session_ttl)
 
     # Publish SSE event
     redis_client.publish_event(course, EventType.SESSION_STOPPED, {})
 
     return SessionResponse(status="stopped")
+
+
+@router.get("/{course}/admin/state")
+async def get_state(
+    course: str,
+    _: Annotated[None, Depends(verify_admin_auth)],
+    redis_client: Annotated[RedisClient, Depends(get_redis_client)],
+) -> AdminStateResponse:
+    """
+    Get the current session and question state
+    """
+    # Verify course exists
+    course_config = app.config.settings.get_course(course)
+    if course_config is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    return get_admin_state(redis_client, course)
 
 
 # Question Management Routes
