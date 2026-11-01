@@ -11,6 +11,8 @@ A real-time question and answer system built with FastAPI and Redis that allows 
 - Instructions can see the distribution of student answers in real-time and can optionally share with students
 - Students can submit freeform questions
 - Instructors can download session data as JSON
+- Instructors can photograph paper attendance sheets on a phone and upload them
+- Admins can choose to stay logged in on a device ("Remember this device")
 
 ## Session Archive Format
 
@@ -105,6 +107,84 @@ automatic) hold a per-course Redis lock, so a session is archived only once
 even if several app processes check at the same time. Set
 `IDLE_SESSION_TIMEOUT=0` to disable auto-stop.
 
+## Attendance Sheet Uploads
+
+If `SHEETS_DIR` is set, each course's admin dashboard links to an "Upload
+Attendance Sheets" page (`/<course>/admin/sheets`) made for a phone: it shows a
+live viewfinder from the rear camera with a shutter button, so several pages can
+be photographed in a row; each shot goes into a strip of thumbnails (tap to
+enlarge, × to delete), and Upload sends them all. Photos are taken at the
+highest resolution the camera offers, then scaled in the browser to at most
+2400 px on the long edge and encoded as JPEG (quality 0.85). Existing photos or
+PDFs can be added with "Choose photos or PDFs". The live camera needs a secure
+context (HTTPS, or `localhost`); without one, or if the camera can't be used,
+the page offers a "Take photo" button that opens the phone's camera app for one
+photo at a time instead. An optional lecture number (0-99) can be given; blank
+means "the next lecture". Opening the page while logged out shows the admin
+login, which returns to the page.
+
+Each upload is stored as its own directory:
+
+```
+$SHEETS_DIR/<course>/<UTC timestamp>-<id>/    e.g. 20261103T183012Z-1a2b3c4d
+├── page-01.jpg          # images in upload order: page-NN.jpg / .png / .heic
+├── page-02.jpg
+├── scan-03.pdf          # PDFs are stored as uploaded, numbered in the same sequence
+└── manifest.json        # written last
+```
+
+```json
+{
+  "id": "20261103T183012Z-1a2b3c4d",
+  "uploaded_at": "2026-11-03T18:30:12Z",
+  "course": "dsc190",
+  "lecture": 7,
+  "files": [
+    {"name": "page-01.jpg", "type": "image/jpeg", "bytes": 612376,
+     "sha256": "f802…", "original_name": "page-01.jpg"}
+  ]
+}
+```
+
+`lecture` is an integer, or `null` for "the next lecture". Every file is written
+to a temporary file (`.<name>.*.tmp`) and renamed into place, and
+`manifest.json` is written after all the other files, so **a reader must treat
+a directory without `manifest.json` as incomplete** and skip it. If saving
+fails, the partial directory is removed. Files are `0640` and directories
+`0750`, as for archives. File types are checked by content (JPEG, PNG, HEIC,
+PDF), not by name. Limits: `SHEETS_MAX_FILE_BYTES` per file,
+`SHEETS_MAX_UPLOAD_BYTES` per upload, `SHEETS_MAX_FILES` files per upload. A
+reverse proxy must allow request bodies that large on the upload URL (see
+below). Uploads are never deleted by the app.
+
+## Remembered Admin Devices
+
+The admin login has a "Remember this device" checkbox. Without it, login works
+as before (a 24-hour `admin_session` cookie). With it, the browser also gets a
+cookie `admin_remember_<course>` that keeps it logged in as that course's admin
+for `ADMIN_REMEMBER_DAYS` days (default 365) without the password. The cookie
+is `HttpOnly`, `SameSite=Lax`, scoped to the app's root path, and holds a
+token signed with `SECRET_KEY` that names the course, a per-course version
+number, and a fingerprint (not a copy) of the course's admin secret. It is
+accepted only for that course, until it expires, while its version is current,
+and while the course's secret is unchanged.
+
+"Forget all remembered devices" on the admin page logs out every remembered
+device of that course (including the current one) by incrementing the version,
+stored in Redis at `admin:course:<course>:remember_version` (outside the
+`course:<course>:*` keys that are cleared when a session stops). Password
+logins are not affected. Changing the course's `secret` in `courses.toml` also
+revokes them; rotating `SECRET_KEY` revokes everything.
+
+The cookie is marked `Secure` when the browser is using HTTPS. The app decides
+this from the request's scheme (which uvicorn takes from `X-Forwarded-Proto`
+sent by a trusted proxy) or, failing that, from the browser's own `Origin`
+header on the login POST (or `Referer` if there is no `Origin`). The latter
+matters when HTTPS is terminated in front of the reverse proxy, which then
+talks plain HTTP and reports `X-Forwarded-Proto: http`. Those headers come from
+the client, but a wrong value only affects the flags of the client's own
+cookie.
+
 ## Requirements
 
 ### Option 1: Using Nix (Recommended for full development environment)
@@ -177,6 +257,12 @@ IDLE_CHECK_INTERVAL=300   # How often to check for idle sessions
 
 # Also write archives to <ARCHIVE_DIR>/<course>/<session_id>.json (default: unset)
 ARCHIVE_DIR=/path/to/archives
+
+# Enable attendance sheet uploads, stored under <SHEETS_DIR>/<course>/ (default: unset)
+SHEETS_DIR=/path/to/sheets
+
+# How long "Remember this device" keeps an admin logged in (days)
+ADMIN_REMEMBER_DAYS=365
 
 # Courses file path (default: courses.toml)
 COURSES_FILE=courses.toml
@@ -314,6 +400,11 @@ uv run mypy app
 | `MAX_QUESTION_LENGTH` | `1000` | Max student question length |
 | `SESSION_TTL` | `172800` | Session TTL after end (seconds) |
 | `ARCHIVE_DIR` | unset | Also write archives to `<dir>/<course>/<session_id>.json` (unset = disabled) |
+| `SHEETS_DIR` | unset | Store attendance sheet uploads in `<dir>/<course>/<upload>/` (unset = uploads disabled) |
+| `SHEETS_MAX_FILE_BYTES` | `20971520` | Largest single file in a sheet upload (20 MB) |
+| `SHEETS_MAX_UPLOAD_BYTES` | `83886080` | Largest total size of one sheet upload (80 MB) |
+| `SHEETS_MAX_FILES` | `20` | Most files in one sheet upload |
+| `ADMIN_REMEMBER_DAYS` | `365` | Lifetime of a "Remember this device" login (days) |
 | `IDLE_SESSION_TIMEOUT` | `7200` | Auto-stop a session after this many idle seconds (`0` = never) |
 | `IDLE_CHECK_INTERVAL` | `300` | How often to check for idle sessions (seconds) |
 | `COURSES_FILE` | `courses.toml` | Path to courses configuration |
@@ -362,6 +453,10 @@ The application includes a NixOS module for production deployment with bundled R
             # who may read them
             archiveDir = "/var/lib/classroom-qa/archives";
             archiveReaders = [ "gha-runner" ];
+
+            # Attendance sheet uploads (default shown; null disables), also
+            # readable by archiveReaders
+            sheetsDir = "/var/lib/classroom-qa/sheets";
           };
         }
       ];
@@ -407,6 +502,17 @@ location /qa {
     proxy_cache off;
     proxy_read_timeout 86400s;
 }
+
+# Sheet uploads are larger than nginx's default 1 MB body limit. Allow at
+# least SHEETS_MAX_UPLOAD_BYTES on the upload URL only.
+location ~ ^/qa/[^/]+/admin/sheets$ {
+    client_max_body_size 100m;
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 ```
 
 ### 4. Deploy
@@ -444,16 +550,21 @@ journalctl -u classroom-qa-redis -f
 | `maxQuestionLength` | int | `1000` | Max question length |
 | `sessionTTL` | int | `172800` | Session TTL (seconds) |
 | `archiveDir` | null or string | `/var/lib/classroom-qa/archives` | Where archives are also written (must be under `/var/lib`; `null` disables) |
-| `archiveReaders` | list of strings | `[]` | Users added to `group` so they can read the archives |
+| `archiveReaders` | list of strings | `[]` | Users added to `group` so they can read the archives and sheet uploads |
+| `sheetsDir` | null or string | `/var/lib/classroom-qa/sheets` | Where attendance sheet uploads are stored (must be under `/var/lib`; `null` disables uploads) |
+| `sheetsMaxFileBytes` | int | `20971520` | Largest file in a sheet upload |
+| `sheetsMaxUploadBytes` | int | `83886080` | Largest sheet upload |
+| `sheetsMaxFiles` | int | `20` | Most files in a sheet upload |
+| `adminRememberDays` | int | `365` | Lifetime of a "Remember this device" login (days) |
 | `idleSessionTimeout` | int | `7200` | Auto-stop idle sessions after this many seconds (`0` = never) |
 | `idleCheckInterval` | int | `300` | Idle check interval (seconds) |
 
-### Reading Archives as Another User
+### Reading Archives and Sheet Uploads as Another User
 
-`archiveDir` is a systemd `StateDirectory` of the service, owned by
-`user`:`group` with mode `0750`; the service runs with `UMask=0027`, and archive
-files are `0640`. So any member of `group` can read the archives, and nobody
-else can write them. To let another local user (say, a GitHub Actions runner
+`archiveDir` and `sheetsDir` are systemd `StateDirectory`s of the service, owned
+by `user`:`group` with mode `0750`; the service runs with `UMask=0027`, and the
+files are `0640`. So any member of `group` can read the archives and uploads,
+and nobody else can write them. To let another local user (say, a GitHub Actions runner
 running as `gha-runner`) read them, either set
 
 ```nix

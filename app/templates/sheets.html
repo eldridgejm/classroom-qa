@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Sheets - {{ course_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Rapid taps on the shutter must not zoom the page (iOS double-tap zoom) */
+    button, label.btn, input { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+    #viewfinder { background: #000; }
+    #video { display: block; width: 100%; max-height: 62vh; object-fit: contain; background: #000; }
+    #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 120ms ease-out; }
+    #flash.on { opacity: 0.7; transition: none; }
+
+    #shutter {
+        width: 84px; height: 84px; border-radius: 9999px;
+        background: #fff; border: 6px solid #4f46e5;
+        box-shadow: 0 0 0 4px #fff, 0 2px 10px rgba(0,0,0,0.35);
+    }
+    #shutter:active { transform: scale(0.94); background: #e0e7ff; }
+    #shutter:disabled { opacity: 0.4; }
+
+    .thumb { position: relative; flex: 0 0 auto; width: 84px; height: 112px; border-radius: 0.5rem; overflow: hidden; background: #e5e7eb; }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb .num { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,0.65); color: #fff; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 9999px; }
+    .thumb .del { position: absolute; top: 0; right: 0; width: 44px; height: 44px; display: flex; align-items: flex-start; justify-content: flex-end; padding: 4px; }
+    .thumb .del span { display: flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(185,28,28,0.92); color: #fff; font-size: 18px; line-height: 1; }
+    .thumb .tile { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: #374151; padding: 4px; text-align: center; word-break: break-all; }
+    .thumb .tile b { font-size: 16px; }
+    .thumb.busy::after { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,0.6); }
+
+    #preview { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: none; align-items: center; justify-content: center; z-index: 50; }
+    #preview.open { display: flex; }
+    #preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+    #upload-bar { position: sticky; bottom: 0; padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto pb-4">
+    <header class="mb-4 flex items-baseline justify-between gap-2">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Attendance Sheets</h1>
+            <p class="text-gray-600">{{ course_name }}</p>
+        </div>
+        <a href="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/admin"
+           class="text-indigo-700 underline py-2 shrink-0">Dashboard</a>
+    </header>
+
+    {% if not enabled %}
+    <div class="p-4 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded">
+        Sheet uploads are not enabled on this server.
+    </div>
+    {% else %}
+
+    <div class="mb-4">
+        <label for="lecture" class="block font-medium text-gray-800 mb-1">Lecture number</label>
+        <div class="flex items-center gap-3">
+            <input id="lecture" name="lecture" type="text" inputmode="numeric" pattern="[0-9]*"
+                   maxlength="2" autocomplete="off" placeholder="next"
+                   class="w-24 px-3 py-2 text-lg border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <p class="text-sm text-gray-600">Two digits, e.g. 07. Leave blank for the next lecture.</p>
+        </div>
+        <p id="lecture-error" class="hidden mt-1 text-sm text-red-700">Enter a number from 0 to 99, or leave it blank.</p>
+    </div>
+
+    <!-- Live camera (secure contexts only) -->
+    <section id="camera" class="hidden mb-4">
+        <div id="viewfinder" class="relative rounded-lg overflow-hidden">
+            <video id="video" autoplay playsinline muted></video>
+            <div id="flash"></div>
+        </div>
+        <div class="flex items-center justify-between mt-3 px-2">
+            <span id="camera-info" class="w-24 text-xs text-gray-500"></span>
+            <button id="shutter" type="button" aria-label="Take photo" disabled></button>
+            <span id="shot-count" class="w-24 text-right text-sm font-medium text-gray-700"></span>
+        </div>
+    </section>
+
+    <!-- Fallback when the live camera isn't available -->
+    <section id="fallback" class="hidden mb-4">
+        <p id="fallback-reason" class="mb-3 text-sm text-gray-600"></p>
+        <label class="btn flex items-center justify-center w-full px-4 py-4 bg-indigo-600 text-white text-lg font-semibold rounded-lg active:bg-indigo-800">
+            Take photo
+            <input id="capture-input" type="file" accept="image/*,application/pdf" capture="environment" class="sr-only">
+        </label>
+    </section>
+
+    <label class="btn flex items-center justify-center w-full px-4 py-3 mb-4 bg-white border border-gray-300 text-gray-800 rounded-lg active:bg-gray-100">
+        Choose photos or PDFs
+        <input id="pick-input" type="file" accept="image/*,application/pdf" multiple class="sr-only">
+    </label>
+
+    <!-- Pages to upload -->
+    <section class="mb-2">
+        <p id="empty-note" class="text-sm text-gray-500">No pages yet.</p>
+        <div id="thumbs" class="flex gap-2 overflow-x-auto pb-2"></div>
+    </section>
+
+    <div id="upload-bar" class="bg-gray-50 pt-2">
+        <div id="progress" class="hidden h-2 mb-2 bg-gray-200 rounded overflow-hidden">
+            <div id="progress-bar" class="h-full bg-indigo-600" style="width: 0%"></div>
+        </div>
+        <div id="status" role="status" aria-live="polite" class="hidden mb-2 p-3 rounded"></div>
+        <button id="upload" type="button" disabled
+                class="w-full px-4 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg active:bg-green-800 disabled:opacity-50">
+            Upload
+        </button>
+    </div>
+
+    <section class="mt-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">Recent uploads</h2>
+        <ul id="recent" class="divide-y divide-gray-200 bg-white border rounded-lg">
+            {% for u in uploads %}
+            <li class="px-3 py-2 flex justify-between gap-2 text-sm">
+                <time datetime="{{ u.uploaded_at }}">{{ u.uploaded_at }}</time>
+                <span class="text-gray-700">
+                    {% if u.lecture is not none %}Lecture {{ '%02d' % u.lecture }}{% else %}Next lecture{% endif %}
+                    · {{ u.images }} page{{ '' if u.images == 1 else 's' }}{% if u.pdfs %} + {{ u.pdfs }} PDF{{ '' if u.pdfs == 1 else 's' }}{% endif %}
+                </span>
+            </li>
+            {% else %}
+            <li class="px-3 py-2 text-sm text-gray-500">None yet.</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+</div>
+
+<div id="preview" role="dialog" aria-label="Page preview"><img alt=""></div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if enabled %}
+<script>
+(function() {
+    const BASE = {{ (request.scope.get('root_path', '') ~ '/' ~ course_slug ~ '/admin/sheets') | tojson }};
+    const MAX_FILES = {{ limits.max_files | int }};
+    const MAX_FILE_BYTES = {{ limits.max_file_bytes | int }};
+    const MAX_UPLOAD_BYTES = {{ limits.max_upload_bytes | int }};
+    const LONG_EDGE = 2400;
+    const JPEG_QUALITY = 0.85;
+
+    const $ = (id) => document.getElementById(id);
+    const video = $('video');
+    const shutter = $('shutter');
+    const thumbs = $('thumbs');
+    const uploadBtn = $('upload');
+    const lectureInput = $('lecture');
+
+    // Each item: {id, blob, name, kind: 'image'|'pdf'|'file', url, busy}
+    let items = [];
+    let nextId = 1;
+    let uploading = false;
+    let stream = null;
+    let imageCapture = null;
+    let cameraWanted = false;
+
+    // ---------- Status ----------
+
+    function showStatus(kind, text) {
+        const el = $('status');
+        el.className = 'mb-2 p-3 rounded ' + ({
+            ok: 'bg-green-100 border border-green-400 text-green-900',
+            error: 'bg-red-100 border border-red-400 text-red-800',
+            info: 'bg-blue-50 border border-blue-300 text-blue-900',
+        })[kind];
+        el.textContent = text;
+    }
+
+    function hideStatus() {
+        $('status').className = 'hidden';
+    }
+
+    function describe(images, pdfs) {
+        const parts = [];
+        if (images) parts.push(images + (images === 1 ? ' page' : ' pages'));
+        if (pdfs) parts.push(pdfs + (pdfs === 1 ? ' PDF' : ' PDFs'));
+        return parts.join(' and ') || 'nothing';
+    }
+
+    function counts() {
+        const images = items.filter(i => i.kind !== 'pdf').length;
+        return {images, pdfs: items.length - images};
+    }
+
+    // ---------- Thumbnails ----------
+
+    function render() {
+        thumbs.replaceChildren(...items.map((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'thumb' + (item.busy ? ' busy' : '');
+            if (item.url) {
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = 'Page ' + (index + 1);
+                img.addEventListener('click', () => openPreview(item.url));
+                div.appendChild(img);
+            } else {
+                const tile = document.createElement('div');
+                tile.className = 'tile';
+                const b = document.createElement('b');
+                b.textContent = item.kind === 'pdf' ? 'PDF' : 'Photo';
+                tile.append(b, document.createTextNode(item.name || ''));
+                div.appendChild(tile);
+            }
+            const num = document.createElement('span');
+            num.className = 'num';
+            num.textContent = index + 1;
+            div.appendChild(num);
+            if (!item.busy) {
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'del';
+                del.setAttribute('aria-label', 'Delete page ' + (index + 1));
+                del.innerHTML = '<span>&times;</span>';
+                del.addEventListener('click', () => removeItem(item.id));
+                div.appendChild(del);
+            }
+            return div;
+        }));
+
+        const c = counts();
+        const ready = items.filter(i => !i.busy).length;
+        $('empty-note').classList.toggle('hidden', items.length > 0);
+        $('shot-count').textContent = items.length ? describe(c.images, c.pdfs) : '';
+        uploadBtn.disabled = uploading || ready === 0 || ready !== items.length;
+        uploadBtn.textContent = uploading ? 'Uploading…' :
+            (items.length ? 'Upload ' + describe(c.images, c.pdfs) : 'Upload');
+    }
+
+    function addPlaceholder(name) {
+        const item = {id: nextId++, blob: null, name, kind: 'image', url: null, busy: true};
+        items.push(item);
+        render();
+        thumbs.scrollLeft = thumbs.scrollWidth;
+        return item;
+    }
+
+    function finishItem(item, blob, kind, url) {
+        if (!items.includes(item)) {
+            if (url) URL.revokeObjectURL(url);
+            return;
+        }
+        Object.assign(item, {blob, kind, url, busy: false});
+        render();
+    }
+
+    function dropItem(item) {
+        items = items.filter(i => i !== item);
+        render();
+    }
+
+    function removeItem(id) {
+        const item = items.find(i => i.id === id);
+        if (item && item.url) URL.revokeObjectURL(item.url);
+        items = items.filter(i => i.id !== id);
+        render();
+    }
+
+    function clearItems() {
+        items.forEach(i => i.url && URL.revokeObjectURL(i.url));
+        items = [];
+        render();
+    }
+
+    function openPreview(url) {
+        const p = $('preview');
+        p.querySelector('img').src = url;
+        p.classList.add('open');
+    }
+    $('preview').addEventListener('click', () => $('preview').classList.remove('open'));
+
+    function roomForMore() {
+        if (items.length >= MAX_FILES) {
+            showStatus('error', 'At most ' + MAX_FILES + ' files per upload. Upload these first.');
+            return false;
+        }
+        return true;
+    }
+
+    // ---------- Image processing ----------
+
+    // Draw a source (video, image, or bitmap) scaled so its long edge is at
+    // most LONG_EDGE, and encode as JPEG.
+    function encodeJpeg(source, width, height) {
+        const scale = Math.min(1, LONG_EDGE / Math.max(width, height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        return new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                // Free the canvas memory right away (iOS limits total canvas memory)
+                canvas.width = canvas.height = 0;
+                blob ? resolve(blob) : reject(new Error('Could not encode the image'));
+            }, 'image/jpeg', JPEG_QUALITY);
+        });
+    }
+
+    function loadImage(blob) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read the image')); };
+            img.src = url;
+        });
+    }
+
+    // Downscale and re-encode an image file; null if the browser can't decode it
+    async function processImageBlob(blob) {
+        try {
+            const img = await loadImage(blob);
+            return await encodeJpeg(img, img.naturalWidth, img.naturalHeight);
+        } catch (e) {
+            console.warn('Could not process image, keeping the original', e);
+            return null;
+        }
+    }
+
+    function isPdf(file) {
+        return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+    }
+
+    async function addFiles(fileList) {
+        hideStatus();
+        for (const file of Array.from(fileList)) {
+            if (!roomForMore()) break;
+            const item = addPlaceholder(file.name);
+            if (isPdf(file)) {
+                if (file.size > MAX_FILE_BYTES) {
+                    dropItem(item);
+                    showStatus('error', '“' + file.name + '” is too large (at most ' + Math.round(MAX_FILE_BYTES / 1048576) + ' MB).');
+                    continue;
+                }
+                finishItem(item, file, 'pdf', null);
+                continue;
+            }
+            const jpeg = await processImageBlob(file);
+            if (jpeg) {
+                finishItem(item, jpeg, 'image', URL.createObjectURL(jpeg));
+            } else if (file.size <= MAX_FILE_BYTES) {
+                // e.g. HEIC in a browser that can't display it: send as is
+                finishItem(item, file, 'file', null);
+            } else {
+                dropItem(item);
+                showStatus('error', '“' + file.name + '” could not be read.');
+            }
+        }
+    }
+
+    $('capture-input').addEventListener('change', (e) => {
+        addFiles(e.target.files).finally(() => { e.target.value = ''; });
+    });
+    $('pick-input').addEventListener('change', (e) => {
+        addFiles(e.target.files).finally(() => { e.target.value = ''; });
+    });
+
+    // ---------- Live camera ----------
+
+    function showFallback(reason) {
+        $('camera').classList.add('hidden');
+        $('fallback').classList.remove('hidden');
+        $('fallback-reason').textContent = reason;
+    }
+
+    function stopCamera() {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        stream = null;
+        imageCapture = null;
+        video.srcObject = null;
+        shutter.disabled = true;
+    }
+
+    async function startCamera() {
+        if (stream) return;
+        try {
+            const s = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: {ideal: 'environment'},
+                    width: {ideal: 4096},
+                    height: {ideal: 3072},
+                },
+            });
+            if (!cameraWanted || document.visibilityState !== 'visible') {
+                s.getTracks().forEach(t => t.stop());
+                return;
+            }
+            stream = s;
+            const track = stream.getVideoTracks()[0];
+
+            // Ask for the largest frame the camera can deliver
+            try {
+                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                const settings = track.getSettings();
+                if (caps.width && caps.height && caps.width.max && caps.height.max &&
+                    caps.width.max * caps.height.max > (settings.width || 0) * (settings.height || 0)) {
+                    await track.applyConstraints({
+                        width: {ideal: caps.width.max},
+                        height: {ideal: caps.height.max},
+                    });
+                }
+            } catch (e) {
+                console.warn('Could not raise camera resolution', e);
+            }
+
+            // Full-resolution stills where supported (not in Safari)
+            if (typeof ImageCapture !== 'undefined') {
+                try { imageCapture = new ImageCapture(track); } catch (e) { imageCapture = null; }
+            }
+
+            video.srcObject = stream;
+            await video.play().catch(() => {});
+            $('camera').classList.remove('hidden');
+            $('fallback').classList.add('hidden');
+            shutter.disabled = false;
+
+            const update = () => {
+                if (video.videoWidth) {
+                    $('camera-info').textContent = video.videoWidth + '×' + video.videoHeight;
+                }
+            };
+            video.addEventListener('loadedmetadata', update, {once: true});
+            video.addEventListener('resize', update);
+            update();
+        } catch (e) {
+            console.warn('Camera unavailable', e);
+            stopCamera();
+            cameraWanted = false;
+            const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+            showFallback(denied
+                ? 'Camera access was not allowed, so use your phone’s camera instead.'
+                : 'The live camera isn’t available, so use your phone’s camera instead.');
+        }
+    }
+
+    function withTimeout(promise, ms) {
+        return Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+        ]);
+    }
+
+    function flash() {
+        const f = $('flash');
+        f.classList.add('on');
+        requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    async function takeShot() {
+        if (!stream || !video.videoWidth) return;
+        if (!roomForMore()) return;
+        hideStatus();
+        flash();
+        const item = addPlaceholder('');
+        try {
+            let blob = null;
+            if (imageCapture) {
+                try {
+                    const photo = await withTimeout(imageCapture.takePhoto(), 5000);
+                    blob = await processImageBlob(photo);
+                } catch (e) {
+                    console.warn('takePhoto failed, using a video frame', e);
+                    imageCapture = null;
+                }
+            }
+            if (!blob) {
+                blob = await encodeJpeg(video, video.videoWidth, video.videoHeight);
+            }
+            finishItem(item, blob, 'image', URL.createObjectURL(blob));
+        } catch (e) {
+            console.error(e);
+            dropItem(item);
+            showStatus('error', 'Could not take the photo. Try again.');
+        }
+    }
+
+    shutter.addEventListener('click', takeShot);
+
+    // Phones stop the camera in the background; release it there and restart on return
+    document.addEventListener('visibilitychange', () => {
+        if (!cameraWanted) return;
+        if (document.visibilityState === 'visible') {
+            startCamera();
+        } else {
+            stopCamera();
+        }
+    });
+    window.addEventListener('pagehide', stopCamera);
+
+    if (window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        cameraWanted = true;
+        startCamera();
+    } else {
+        showFallback('The live camera needs a secure connection, so use your phone’s camera instead.');
+    }
+
+    // ---------- Upload ----------
+
+    function lectureValue() {
+        const v = lectureInput.value.trim();
+        const ok = /^[0-9]{0,2}$/.test(v);
+        $('lecture-error').classList.toggle('hidden', ok);
+        return ok ? v : null;
+    }
+    lectureInput.addEventListener('input', lectureValue);
+
+    function errorMessage(xhr) {
+        let detail = null;
+        try { detail = JSON.parse(xhr.responseText).detail; } catch (e) {}
+        if (typeof detail !== 'string') detail = null;
+        if (xhr.status === 403 || xhr.status === 401) {
+            return 'You are not logged in any more. Your photos are still here: log in again in another tab, then tap Upload again.';
+        }
+        if (xhr.status === 413) {
+            return detail || 'The server refused the upload as too large.';
+        }
+        return (detail || ('The server returned an error (' + xhr.status + ').')) + ' Your photos are still here.';
+    }
+
+    uploadBtn.addEventListener('click', () => {
+        if (uploading || items.length === 0) return;
+        const lecture = lectureValue();
+        if (lecture === null) {
+            lectureInput.focus();
+            return;
+        }
+        const total = items.reduce((n, i) => n + i.blob.size, 0);
+        if (total > MAX_UPLOAD_BYTES) {
+            showStatus('error', 'These files are too large to upload together (at most ' + Math.round(MAX_UPLOAD_BYTES / 1048576) + ' MB). Remove some and upload them separately.');
+            return;
+        }
+
+        const form = new FormData();
+        form.append('lecture', lecture);
+        items.forEach((item, index) => {
+            const n = String(index + 1).padStart(2, '0');
+            const name = item.kind === 'image' ? 'page-' + n + '.jpg' : (item.name || 'file-' + n);
+            form.append('files', item.blob, name);
+        });
+
+        const sent = counts();
+        uploading = true;
+        render();
+        $('progress').classList.remove('hidden');
+        $('progress-bar').style.width = '0%';
+        showStatus('info', 'Uploading ' + describe(sent.images, sent.pdfs) + '…');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', BASE);
+        xhr.responseType = 'text';
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                $('progress-bar').style.width = Math.round(100 * e.loaded / e.total) + '%';
+            }
+        });
+        xhr.addEventListener('load', () => {
+            uploading = false;
+            $('progress').classList.add('hidden');
+            if (xhr.status >= 200 && xhr.status < 300) {
+                let result = {};
+                try { result = JSON.parse(xhr.responseText); } catch (e) {}
+                const what = describe(result.images ?? sent.images, result.pdfs ?? sent.pdfs);
+                const when = (result.lecture === null || result.lecture === undefined)
+                    ? 'the next lecture' : 'lecture ' + String(result.lecture).padStart(2, '0');
+                clearItems();
+                showStatus('ok', '✓ Uploaded ' + what + ' for ' + when + '.');
+                refreshRecent();
+            } else {
+                render();
+                showStatus('error', 'Upload failed. ' + errorMessage(xhr));
+            }
+        });
+        xhr.addEventListener('error', () => {
+            uploading = false;
+            $('progress').classList.add('hidden');
+            render();
+            showStatus('error', 'Upload failed: no connection to the server. Your photos are still here; try again.');
+        });
+        xhr.send(form);
+    });
+
+    window.addEventListener('beforeunload', (e) => {
+        if (items.length > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // ---------- Recent uploads ----------
+
+    function formatTimes(root) {
+        root.querySelectorAll('time[datetime]').forEach((t) => {
+            const d = new Date(t.getAttribute('datetime'));
+            if (!isNaN(d)) {
+                t.textContent = d.toLocaleString([], {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+            }
+        });
+    }
+
+    async function refreshRecent() {
+        try {
+            const resp = await fetch(BASE + '/recent', {credentials: 'same-origin'});
+            if (!resp.ok) return;
+            const uploads = await resp.json();
+            const list = $('recent');
+            if (!uploads.length) return;
+            list.replaceChildren(...uploads.map((u) => {
+                const li = document.createElement('li');
+                li.className = 'px-3 py-2 flex justify-between gap-2 text-sm';
+                const t = document.createElement('time');
+                t.setAttribute('datetime', u.uploaded_at);
+                t.textContent = u.uploaded_at;
+                const s = document.createElement('span');
+                s.className = 'text-gray-700';
+                const lec = (u.lecture === null || u.lecture === undefined)
+                    ? 'Next lecture' : 'Lecture ' + String(u.lecture).padStart(2, '0');
+                s.textContent = lec + ' · ' + u.images + (u.images === 1 ? ' page' : ' pages') +
+                    (u.pdfs ? ' + ' + u.pdfs + (u.pdfs === 1 ? ' PDF' : ' PDFs') : '');
+                li.append(t, s);
+                return li;
+            }));
+            formatTimes(list);
+        } catch (e) {
+            console.warn('Could not refresh recent uploads', e);
+        }
+    }
+
+    formatTimes(document);
+    render();
+})();
+</script>
+{% endif %}
+{% endblock %}

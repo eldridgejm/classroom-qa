@@ -120,6 +120,41 @@ class RedisClient:
         """
         return f"lock:course:{course}:stop"
 
+    def admin_remember_version_key(self, course: str) -> str:
+        """
+        Generate Redis key for the course's "remember this device" token version
+
+        Deliberately outside the course:{course}:* namespace, which
+        clear_session_data deletes (and apply_ttl_to_course_keys expires) when
+        a session stops: losing the counter would un-revoke old tokens.
+        """
+        return f"admin:course:{course}:remember_version"
+
+    # Remembered admin devices
+
+    def get_admin_remember_version(self, course: str) -> int:
+        """
+        Current version of the course's remembered-device tokens (0 if never revoked)
+
+        Only tokens carrying this version are accepted.
+        """
+        value = cast(str | bytes | None, self.redis.get(self.admin_remember_version_key(course)))
+        if value is None:
+            return 0
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+
+    def revoke_admin_remembered_devices(self, course: str) -> int:
+        """
+        Revoke every remembered device for the course by bumping the version
+
+        Returns:
+            The new version
+        """
+        return int(cast(int, self.redis.incr(self.admin_remember_version_key(course))))
+
     # Activity tracking
 
     def touch_activity(self, course: str) -> None:

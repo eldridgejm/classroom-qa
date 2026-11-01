@@ -5,6 +5,10 @@
   ...
 }: let
   cfg = config.services.classroom-qa;
+  # Directories the app writes files to for other local users to read
+  stateDirs =
+    map (lib.removePrefix "/var/lib/")
+    (lib.filter (d: d != null) [cfg.archiveDir cfg.sheetsDir]);
   inherit (lib) mkEnableOption mkOption mkIf types;
 in {
   options.services.classroom-qa = {
@@ -118,8 +122,59 @@ in {
       example = ["gha-runner"];
       description = ''
         Users to add to `group` so that they can read (but not write) the
-        session archives in archiveDir. A running service of such a user must
-        be restarted to pick up the new group.
+        files the service writes for other tools: the session archives in
+        archiveDir and the uploaded attendance sheets in sheetsDir. A running
+        service of such a user must be restarted to pick up the new group.
+      '';
+    };
+
+    # Uploaded attendance sheets
+    sheetsDir = mkOption {
+      type = types.nullOr types.str;
+      default = "/var/lib/classroom-qa/sheets";
+      description = ''
+        Directory for photos/PDFs of paper attendance sheets uploaded from
+        the admin "Upload Attendance Sheets" page, stored as
+        <sheetsDir>/<course>/<UTC timestamp>-<id>/ with page files and a
+        manifest.json written last. Kept forever. Set to null to disable
+        uploads.
+
+        Must be under /var/lib: like archiveDir, it is a systemd
+        StateDirectory owned by `user`:`group` with mode 0750, and files are
+        written with mode 0640, so archiveReaders can read them.
+      '';
+    };
+
+    sheetsMaxFileBytes = mkOption {
+      type = types.int;
+      default = 20 * 1024 * 1024;
+      description = "Largest single file (photo or PDF) in a sheet upload, in bytes";
+    };
+
+    sheetsMaxUploadBytes = mkOption {
+      type = types.int;
+      default = 80 * 1024 * 1024;
+      description = ''
+        Largest total size of one sheet upload, in bytes. A reverse proxy in
+        front of the app must allow request bodies at least this large on
+        the upload URL (nginx's client_max_body_size defaults to 1 MB).
+      '';
+    };
+
+    sheetsMaxFiles = mkOption {
+      type = types.int;
+      default = 20;
+      description = "Most files (pages or PDFs) in one sheet upload";
+    };
+
+    # "Remember this device" on the admin login
+    adminRememberDays = mkOption {
+      type = types.int;
+      default = 365;
+      description = ''
+        How long, in days, a browser whose admin login had "Remember this
+        device" checked stays logged in as that course's admin. All of a
+        course's remembered devices can be logged out from its admin page.
       '';
     };
 
@@ -147,6 +202,10 @@ in {
         assertion = cfg.archiveDir == null || lib.hasPrefix "/var/lib/" cfg.archiveDir;
         message = "services.classroom-qa.archiveDir must be under /var/lib/ (or null)";
       }
+      {
+        assertion = cfg.sheetsDir == null || lib.hasPrefix "/var/lib/" cfg.sheetsDir;
+        message = "services.classroom-qa.sheetsDir must be under /var/lib/ (or null)";
+      }
     ];
 
     # Create user and group
@@ -156,7 +215,7 @@ in {
       description = "Classroom QA service user";
     };
 
-    # archiveReaders join the service group to read the archives
+    # archiveReaders join the service group to read the archives and sheets
     users.groups.${cfg.group}.members = cfg.archiveReaders;
 
     # Bundled Redis service
@@ -199,8 +258,14 @@ in {
         SESSION_TTL = toString cfg.sessionTTL;
         IDLE_SESSION_TIMEOUT = toString cfg.idleSessionTimeout;
         IDLE_CHECK_INTERVAL = toString cfg.idleCheckInterval;
+        SHEETS_MAX_FILE_BYTES = toString cfg.sheetsMaxFileBytes;
+        SHEETS_MAX_UPLOAD_BYTES = toString cfg.sheetsMaxUploadBytes;
+        SHEETS_MAX_FILES = toString cfg.sheetsMaxFiles;
+        ADMIN_REMEMBER_DAYS = toString cfg.adminRememberDays;
       } // lib.optionalAttrs (cfg.archiveDir != null) {
         ARCHIVE_DIR = cfg.archiveDir;
+      } // lib.optionalAttrs (cfg.sheetsDir != null) {
+        SHEETS_DIR = cfg.sheetsDir;
       };
 
       serviceConfig = {
@@ -213,8 +278,8 @@ in {
         # Load secret key from file
         LoadCredential = "secret-key:${cfg.secretKeyFile}";
 
-        # Files the service creates (session archives) are readable by its
-        # group but not by other users
+        # Files the service creates (session archives, sheet uploads) are
+        # readable by its group but not by other users
         UMask = "0027";
 
         # Security hardening
@@ -223,10 +288,10 @@ in {
         ProtectSystem = "strict";
         ProtectHome = true;
         ReadOnlyPaths = cfg.coursesFile;
-      } // lib.optionalAttrs (cfg.archiveDir != null) {
+      } // lib.optionalAttrs (stateDirs != []) {
         # Created (and made writable despite ProtectSystem) by systemd before
         # the service starts, owned by user:group
-        StateDirectory = lib.removePrefix "/var/lib/" cfg.archiveDir;
+        StateDirectory = stateDirs;
         StateDirectoryMode = "0750";
       };
 

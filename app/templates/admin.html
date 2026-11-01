@@ -37,7 +37,26 @@
                         class="inline-block px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700">
                         Download Session Data
                     </a>
+                    {% if sheets_enabled %}
+                    <a
+                        href="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/admin/sheets"
+                        class="inline-block px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700">
+                        Upload Attendance Sheets
+                    </a>
+                    {% endif %}
                 </div>
+                <form
+                    method="POST"
+                    action="{{ request.scope.get('root_path', '') }}/{{ course_slug }}/admin/remembered-devices/revoke"
+                    class="mt-3 text-sm text-gray-600"
+                    onsubmit="return confirm('Log out every remembered device for this course, including this one? Devices logged in with the password (without “Remember this device”) stay logged in until their session ends.');">
+                    {% if device_remembered %}
+                    <span>This device is remembered (for up to {{ remember_days }} days from login).</span>
+                    {% endif %}
+                    <button type="submit" class="underline text-red-700 hover:text-red-800">
+                        Forget all remembered devices
+                    </button>
+                </form>
             </div>
 
             <!-- Question Creation / Live Distribution Container -->

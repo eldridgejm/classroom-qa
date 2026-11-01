@@ -2,19 +2,33 @@
 Admin routes for course management
 """
 
-from typing import Annotated
+import asyncio
+import logging
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
+from starlette.datastructures import UploadFile as StarletteUploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import app.config
-from app.auth import create_admin_cookie, require_admin, verify_admin_cookie
+from app.auth import (
+    create_admin_cookie,
+    create_remember_token,
+    remember_cookie_name,
+    request_is_https,
+    verify_admin_cookie,
+    verify_remember_token,
+)
 from app.models import EventType, QuestionType
 from app.redis_client import RedisClient
 from app.services import sessions
 from app.services.distribution import build_distribution
+from app.sheet_files import SheetFile, list_sheet_uploads, sniff_sheet_type, write_sheet_upload
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -50,13 +64,62 @@ def get_redis_client() -> RedisClient:
     return RedisClient(redis_conn)
 
 
+def is_remembered_device(request: Request, course: str) -> bool:
+    """Whether the request carries a valid, unrevoked remember-device cookie for the course"""
+    token = request.cookies.get(remember_cookie_name(course))
+    if not token:
+        return False
+    redis_client = get_redis_client()
+    try:
+        version = redis_client.get_admin_remember_version(course)
+    finally:
+        redis_client.redis.close()
+    return verify_remember_token(token, course, version, app.config.settings)
+
+
+def is_admin_authenticated(request: Request, course: str) -> bool:
+    """
+    Whether the request is logged in as the course's admin: either a valid
+    admin_session cookie (password login) or a remembered device
+    """
+    if verify_admin_cookie(request.cookies.get("admin_session"), course, app.config.settings):
+        return True
+    return is_remembered_device(request, course)
+
+
 # Dependency to verify admin authentication
-def verify_admin_auth(
-    course: str,
-    admin_session: Annotated[str | None, Cookie()] = None,
-) -> None:
+def verify_admin_auth(request: Request, course: str) -> None:
     """Verify admin authentication"""
-    require_admin(admin_session, course, app.config.settings)
+    if not is_admin_authenticated(request, course):
+        raise HTTPException(status_code=403, detail="Invalid admin credentials")
+
+
+# Admin pages the login form may return to (besides the dashboard), by name.
+# A fixed list, so the login can't be used as an open redirect.
+LOGIN_NEXT_PAGES = {"sheets": "admin/sheets"}
+
+
+def render_login(
+    request: Request,
+    course: str,
+    course_name: str,
+    error: str | None = None,
+    next_page: str | None = None,
+    status_code: int = 200,
+) -> Response:
+    """Render the admin login page"""
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_login.html",
+        context={
+            "course_name": course_name,
+            "course_slug": course,
+            "error": error,
+            "next_page": next_page if next_page in LOGIN_NEXT_PAGES else None,
+        },
+        status_code=status_code,
+    )
+
 
 
 # Request/Response models
@@ -151,8 +214,7 @@ async def admin_page(request: Request, course: str) -> Response:
         raise HTTPException(status_code=404, detail="Course not found")
 
     # Check if admin is authenticated
-    admin_cookie = request.cookies.get("admin_session")
-    is_authenticated = verify_admin_cookie(admin_cookie, course, app.config.settings)
+    is_authenticated = is_admin_authenticated(request, course)
 
     if is_authenticated:
         # Check if session is currently live
@@ -173,19 +235,14 @@ async def admin_page(request: Request, course: str) -> Response:
                 "current_question": (
                     state.current_question.model_dump() if state.current_question else None
                 ),
+                "sheets_enabled": bool(app.config.settings.sheets_dir),
+                "device_remembered": is_remembered_device(request, course),
+                "remember_days": app.config.settings.admin_remember_days,
             },
         )
     else:
         # Show login page
-        return templates.TemplateResponse(
-            request=request,
-            name="admin_login.html",
-            context={
-                "course_name": course_config.name,
-                "course_slug": course,
-                "error": None,
-            },
-        )
+        return render_login(request, course, course_config.name)
 
 
 @router.post("/{course}/admin/login")
@@ -193,9 +250,13 @@ async def admin_login(
     request: Request,
     course: str,
     secret: str = Form(...),
+    remember: str | None = Form(None),
+    next_page: str | None = Form(None, alias="next"),
 ) -> Response:
     """
     Admin login endpoint - verifies secret and sets cookie
+
+    With "remember" checked, also sets a long-lived remember-device cookie.
     """
     # Check if course exists
     course_config = app.config.settings.get_course(course)
@@ -205,24 +266,24 @@ async def admin_login(
     # Verify secret
     if secret != course_config.secret:
         # Return to login page with error
-        return templates.TemplateResponse(
-            request=request,
-            name="admin_login.html",
-            context={
-                "course_name": course_config.name,
-                "course_slug": course,
-                "error": "Invalid admin secret",
-            },
+        return render_login(
+            request,
+            course,
+            course_config.name,
+            error="Invalid admin secret",
+            next_page=next_page,
             status_code=401,
         )
 
     # Create admin cookie
     cookie = create_admin_cookie(course, course_config.secret, app.config.settings.secret_key)
 
-    # Redirect to admin dashboard (include root_path for subpath deployments)
+    # Redirect to admin dashboard, or the admin page the login came from
+    # (include root_path for subpath deployments)
     root_path = request.scope.get("root_path", "")
+    target = LOGIN_NEXT_PAGES.get(next_page or "", "admin")
     response = RedirectResponse(
-        url=f"{root_path}/{course}/admin",
+        url=f"{root_path}/{course}/{target}",
         status_code=303,
     )
     response.set_cookie(
@@ -234,6 +295,54 @@ async def admin_login(
         max_age=86400,  # 24 hours
     )
 
+    if remember:
+        settings = app.config.settings
+        redis_client = get_redis_client()
+        try:
+            version = redis_client.get_admin_remember_version(course)
+        finally:
+            redis_client.redis.close()
+        response.set_cookie(
+            key=remember_cookie_name(course),
+            value=create_remember_token(
+                course, course_config.secret, version, settings.secret_key
+            ),
+            max_age=max(0, settings.admin_remember_days) * 86400,
+            path=f"{root_path}/",
+            httponly=True,
+            secure=request_is_https(request),
+            samesite="lax",
+        )
+
+    return response
+
+
+@router.post("/{course}/admin/remembered-devices/revoke")
+async def revoke_remembered_devices(
+    request: Request,
+    course: str,
+    _: Annotated[None, Depends(verify_admin_auth)],
+    redis_client: Annotated[RedisClient, Depends(get_redis_client)],
+) -> Response:
+    """
+    Log out every remembered device for the course (including this one) by
+    bumping the course's remember version. Password logins are unaffected.
+    """
+    course_config = app.config.settings.get_course(course)
+    if course_config is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    redis_client.revoke_admin_remembered_devices(course)
+
+    root_path = request.scope.get("root_path", "")
+    response = RedirectResponse(url=f"{root_path}/{course}/admin", status_code=303)
+    response.delete_cookie(
+        key=remember_cookie_name(course),
+        path=f"{root_path}/",
+        httponly=True,
+        secure=request_is_https(request),
+        samesite="lax",
+    )
     return response
 
 
@@ -664,3 +773,185 @@ async def dismiss_question(
         raise HTTPException(status_code=404, detail="Question not found")
 
     return {"status": "dismissed", "question_id": question_id}
+
+
+# Attendance Sheet Uploads
+
+
+def _sheets_context(course: str) -> dict[str, Any]:
+    settings = app.config.settings
+    return {
+        "max_files": settings.sheets_max_files,
+        "max_file_bytes": settings.sheets_max_file_bytes,
+        "max_upload_bytes": settings.sheets_max_upload_bytes,
+    }
+
+
+def _recent_uploads(course: str) -> list[dict[str, Any]]:
+    sheets_dir = app.config.settings.sheets_dir
+    if not sheets_dir:
+        return []
+    return [
+        {
+            "id": m.get("id"),
+            "uploaded_at": m.get("uploaded_at"),
+            "lecture": m.get("lecture"),
+            "images": sum(1 for f in m["files"] if str(f.get("type", "")).startswith("image/")),
+            "pdfs": sum(1 for f in m["files"] if f.get("type") == "application/pdf"),
+        }
+        for m in list_sheet_uploads(sheets_dir, course)
+    ]
+
+
+@router.get("/{course}/admin/sheets", response_class=HTMLResponse)
+async def sheets_page(request: Request, course: str) -> Response:
+    """
+    Page for photographing paper attendance sheets and uploading them
+    (shows the login form, returning here, if not authenticated)
+    """
+    course_config = app.config.settings.get_course(course)
+    if course_config is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    if not is_admin_authenticated(request, course):
+        return render_login(request, course, course_config.name, next_page="sheets")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="sheets.html",
+        context={
+            "course_name": course_config.name,
+            "course_slug": course,
+            "enabled": bool(app.config.settings.sheets_dir),
+            "uploads": _recent_uploads(course),
+            "limits": _sheets_context(course),
+        },
+    )
+
+
+@router.get("/{course}/admin/sheets/recent")
+async def recent_sheet_uploads(
+    course: str,
+    _: Annotated[None, Depends(verify_admin_auth)],
+) -> list[dict[str, Any]]:
+    """The course's most recent sheet uploads (newest first)"""
+    if app.config.settings.get_course(course) is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return _recent_uploads(course)
+
+
+def _mib(n: int) -> str:
+    return f"{n / (1024 * 1024):.0f} MB"
+
+
+@router.post("/{course}/admin/sheets")
+async def upload_sheets(
+    request: Request,
+    course: str,
+    _: Annotated[None, Depends(verify_admin_auth)],
+) -> dict[str, Any]:
+    """
+    Upload photos or PDFs of attendance sheets (multipart form: "files", one
+    per page/PDF in order, and optional "lecture", 0-99; blank = next lecture)
+    """
+    settings = app.config.settings
+    if settings.get_course(course) is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if not settings.sheets_dir:
+        raise HTTPException(status_code=503, detail="Sheet uploads are not enabled")
+
+    max_files = settings.sheets_max_files
+    max_file = settings.sheets_max_file_bytes
+    max_total = settings.sheets_max_upload_bytes
+
+    # Reject an obviously oversized body before parsing it (allowing for
+    # multipart overhead); the total is checked again after parsing.
+    try:
+        content_length = int(request.headers.get("content-length", "0"))
+    except ValueError:
+        content_length = 0
+    if content_length > max_total + 64 * 1024 + 2048 * (max_files + 2):
+        raise HTTPException(
+            status_code=413, detail=f"Upload too large (at most {_mib(max_total)} in total)"
+        )
+
+    try:
+        form = await request.form(max_files=max_files, max_fields=10)
+    except StarletteHTTPException as exc:
+        if "Too many files" in str(exc.detail):
+            raise HTTPException(
+                status_code=422, detail=f"Too many files (at most {max_files} per upload)"
+            ) from None
+        raise
+
+    try:
+        lecture_raw = form.get("lecture")
+        lecture_str = lecture_raw.strip() if isinstance(lecture_raw, str) else ""
+        lecture: int | None = None
+        if lecture_str:
+            if not (lecture_str.isascii() and lecture_str.isdigit() and len(lecture_str) <= 2):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Lecture must be a number from 0 to 99 (or blank for the next lecture)",
+                )
+            lecture = int(lecture_str)
+
+        uploads = [f for f in form.getlist("files") if isinstance(f, StarletteUploadFile)]
+        if not uploads:
+            raise HTTPException(status_code=422, detail="No files were uploaded")
+        if len(uploads) > max_files:
+            raise HTTPException(
+                status_code=422, detail=f"Too many files (at most {max_files} per upload)"
+            )
+
+        files: list[SheetFile] = []
+        total = 0
+        for i, upload in enumerate(uploads, start=1):
+            data = await upload.read(max_file + 1)
+            if len(data) > max_file:
+                raise HTTPException(
+                    status_code=413, detail=f"File {i} is too large (at most {_mib(max_file)})"
+                )
+            if not data:
+                raise HTTPException(status_code=422, detail=f"File {i} is empty")
+            total += len(data)
+            if total > max_total:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Upload too large (at most {_mib(max_total)} in total)",
+                )
+            sheet_type = sniff_sheet_type(data[:64])
+            if sheet_type is None:
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"File {i} is not a JPEG, PNG, HEIC, or PDF",
+                )
+            files.append(SheetFile(data=data, type=sheet_type, original_name=upload.filename))
+    finally:
+        await form.close()
+
+    try:
+        manifest = await asyncio.to_thread(
+            write_sheet_upload, settings.sheets_dir, course, files, lecture
+        )
+    except Exception:
+        logger.exception("Failed to store sheet upload for %s", course)
+        raise HTTPException(
+            status_code=500, detail="The server could not save the upload; nothing was saved"
+        ) from None
+
+    logger.info(
+        "Stored sheet upload %s for %s (%d files, lecture %s)",
+        manifest["id"],
+        course,
+        len(files),
+        lecture,
+    )
+    return {
+        "id": manifest["id"],
+        "uploaded_at": manifest["uploaded_at"],
+        "lecture": lecture,
+        "files": len(files),
+        "images": sum(1 for f in files if f.type.is_image),
+        "pdfs": sum(1 for f in files if not f.type.is_image),
+    }

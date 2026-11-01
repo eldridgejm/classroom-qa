@@ -1,5 +1,5 @@
 """
-Writing session archives to disk
+Writing session archives (and other files other local users read) to disk
 """
 
 import os
@@ -43,12 +43,23 @@ def write_archive_file(
     """
     path = archive_file_path(archive_dir, course, session_id)
     path.parent.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+    atomic_write_bytes(path, content.encode("utf-8"))
+    return path
 
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{session_id}.", suffix=".tmp")
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    """
+    Atomically write data to path, with mode FILE_MODE
+
+    The data is written to a temporary file in the same directory (named
+    ".<name>.<random>.tmp"), flushed to disk, and renamed into place, so a
+    reader never sees a partial file at path. The parent directory must exist.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        with os.fdopen(fd, "wb") as f:
             os.fchmod(f.fileno(), FILE_MODE)
-            f.write(content)
+            f.write(data)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_name, path)
@@ -59,16 +70,18 @@ def write_archive_file(
             pass
         raise
 
-    # Make the rename itself durable
+    fsync_dir(path.parent)
+
+
+def fsync_dir(directory: Path) -> None:
+    """Best-effort fsync of a directory, to make renames and creations in it durable"""
     try:
-        dir_fd = os.open(path.parent, os.O_RDONLY)
+        dir_fd = os.open(directory, os.O_RDONLY)
     except OSError:
-        return path
+        return
     try:
         os.fsync(dir_fd)
     except OSError:
         pass
     finally:
         os.close(dir_fd)
-
-    return path

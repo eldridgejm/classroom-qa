@@ -10,8 +10,9 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 import app.config
-from app.auth import require_admin, require_tsn
+from app.auth import require_tsn
 from app.models import EventType
+from app.routes import admin as admin_routes
 
 router = APIRouter()
 
@@ -19,13 +20,8 @@ router = APIRouter()
 HEARTBEAT_INTERVAL = 15
 
 
-# Dependency to verify admin authentication
-def verify_admin_auth(
-    course: str,
-    admin_session: Annotated[str | None, Cookie()] = None,
-) -> None:
-    """Verify admin authentication"""
-    require_admin(admin_session, course, app.config.settings)
+# Dependency to verify admin authentication (password login or remembered device)
+verify_admin_auth = admin_routes.verify_admin_auth
 
 
 # Dependency to verify TSN authentication

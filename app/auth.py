@@ -2,12 +2,14 @@
 Authentication and authorization helpers
 """
 
+import hashlib
 import hmac
 import re
 import secrets
+from urllib.parse import urlsplit
 
-from fastapi import HTTPException
-from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from fastapi import HTTPException, Request
+from itsdangerous import BadSignature, SignatureExpired, TimestampSigner, URLSafeTimedSerializer
 
 from app.config import Settings
 
@@ -159,6 +161,117 @@ def verify_admin_cookie(
     except Exception:
         # Catch any other exceptions (e.g., parsing errors)
         return False
+
+
+# "Remember this device" for admin login
+#
+# A remembered device holds a long-lived cookie (one per course) carrying a
+# signed, timestamped token. The token names the course, the course's current
+# remember version (a counter in Redis that "revoke all" bumps), and a
+# fingerprint of the course's admin secret, so changing the admin secret also
+# revokes every remembered device. Unlike the admin_session cookie, the token
+# does not contain the admin secret itself.
+
+REMEMBER_COOKIE_PREFIX = "admin_remember_"
+_REMEMBER_SALT = "admin-remember-device"
+
+
+def remember_cookie_name(course: str) -> str:
+    """Name of the course's remember-device cookie (one per course, so several can coexist)"""
+    # Cookie names are HTTP tokens; slugs are URL path segments and normally
+    # fit already. Mapping anything else to "_" can't confuse courses, since
+    # the token itself names its course.
+    return REMEMBER_COOKIE_PREFIX + re.sub(r"[^A-Za-z0-9_-]", "_", course)
+
+
+def _course_secret_fingerprint(course_secret: str, secret_key: str) -> str:
+    return hmac.new(
+        secret_key.encode(), f"remember:{course_secret}".encode(), hashlib.sha256
+    ).hexdigest()[:32]
+
+
+def create_remember_token(course: str, course_secret: str, version: int, secret_key: str) -> str:
+    """
+    Create a signed, timestamped remember-device token for a course
+
+    Args:
+        course: Course slug
+        course_secret: Course's admin secret (only a fingerprint goes in the token)
+        version: The course's current remember version (from Redis)
+        secret_key: The app's secret key, used to sign
+    """
+    serializer = URLSafeTimedSerializer(secret_key, salt=_REMEMBER_SALT)
+    return serializer.dumps(
+        {
+            "c": course,
+            "v": version,
+            "k": _course_secret_fingerprint(course_secret, secret_key),
+        }
+    )
+
+
+def verify_remember_token(
+    token: str | None,
+    course: str,
+    current_version: int,
+    settings: Settings,
+) -> bool:
+    """
+    Check a remember-device token for a course
+
+    Valid only if the signature is good, it is younger than
+    settings.admin_remember_days, it names this course, its version is the
+    course's current one, and the course's admin secret hasn't changed.
+    """
+    if not token:
+        return False
+
+    course_config = settings.get_course(course)
+    if course_config is None:
+        return False
+
+    serializer = URLSafeTimedSerializer(settings.secret_key, salt=_REMEMBER_SALT)
+    try:
+        data = serializer.loads(token, max_age=max(0, settings.admin_remember_days) * 86400)
+    except (BadSignature, SignatureExpired):
+        return False
+    except Exception:
+        return False
+
+    if not isinstance(data, dict):
+        return False
+
+    expected_fp = _course_secret_fingerprint(course_config.secret, settings.secret_key)
+    return (
+        data.get("c") == course
+        and type(data.get("v")) is int
+        and data["v"] == current_version
+        and isinstance(data.get("k"), str)
+        and hmac.compare_digest(data["k"], expected_fp)
+    )
+
+
+def request_is_https(request: Request) -> bool:
+    """
+    Whether the browser reached this page over HTTPS (for the cookie Secure flag)
+
+    The request's own scheme comes from uvicorn, which takes it from
+    X-Forwarded-Proto when the proxy is trusted. That is right when HTTPS ends
+    at the proxy in front of the app, but not when HTTPS ends at a hop in
+    front of that proxy, which then forwards plain HTTP and reports "http".
+    So also look at what the browser itself says: browsers send Origin (or
+    failing that Referer) on form POSTs, giving the scheme of the page the
+    form was on, and that is exactly the connection the cookie travels over.
+    These headers are client-controlled, but a false value only changes the
+    flags on the client's own cookie.
+    """
+    if request.url.scheme == "https":
+        return True
+    for header in ("origin", "referer"):
+        value = request.headers.get(header)
+        if value and value != "null":
+            return urlsplit(value).scheme == "https"
+    return False
 
 
 # CSRF Token Management

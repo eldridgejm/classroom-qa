@@ -29,6 +29,21 @@
                 >
             </div>
 
+            <label class="flex items-center gap-3 py-1 text-gray-700 select-none">
+                <input
+                    type="checkbox"
+                    id="remember"
+                    name="remember"
+                    value="1"
+                    class="h-5 w-5 rounded border-gray-300"
+                >
+                <span>Remember this device</span>
+            </label>
+
+            {% if next_page %}
+            <input type="hidden" name="next" value="{{ next_page }}">
+            {% endif %}
+
             <button
                 type="submit"
                 class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"

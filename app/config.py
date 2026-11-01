@@ -55,6 +55,26 @@ class Settings(BaseSettings):
         description="Directory to also write session archives to, as <dir>/<course>/<id>.json",
     )
 
+    # Uploaded attendance sheets (unset or empty = uploads disabled)
+    sheets_dir: str | None = Field(
+        default=None,
+        description="Directory for uploaded attendance sheets, as <dir>/<course>/<upload>/",
+    )
+    sheets_max_file_bytes: int = Field(
+        default=20 * 1024 * 1024, description="Largest single file in a sheet upload (bytes)"
+    )
+    sheets_max_upload_bytes: int = Field(
+        default=80 * 1024 * 1024, description="Largest total size of one sheet upload (bytes)"
+    )
+    sheets_max_files: int = Field(
+        default=20, description="Most files (pages or PDFs) in one sheet upload"
+    )
+
+    # "Remember this device" on the admin login
+    admin_remember_days: int = Field(
+        default=365, description="How long a remembered device stays logged in as admin (days)"
+    )
+
     # Auto-stop of idle sessions
     idle_session_timeout: int = Field(
         default=7200,
