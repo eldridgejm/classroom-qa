@@ -95,9 +95,60 @@ in {
       default = 172800;
       description = "Session archive TTL in seconds (48 hours)";
     };
+
+    # Session archives on disk
+    archiveDir = mkOption {
+      type = types.nullOr types.str;
+      default = "/var/lib/classroom-qa/archives";
+      description = ''
+        Directory to which every archived session is also written, as
+        <archiveDir>/<course>/<session-id>.json (same JSON as the Redis
+        archive, which still expires after sessionTTL). Files are kept
+        forever. Set to null to disable.
+
+        Must be under /var/lib: it is managed as a systemd StateDirectory
+        owned by `user`:`group` with mode 0750, and the files are written
+        with mode 0640. Members of `group` (see archiveReaders) can read them.
+      '';
+    };
+
+    archiveReaders = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      example = ["gha-runner"];
+      description = ''
+        Users to add to `group` so that they can read (but not write) the
+        session archives in archiveDir. A running service of such a user must
+        be restarted to pick up the new group.
+      '';
+    };
+
+    # Auto-stop of idle sessions
+    idleSessionTimeout = mkOption {
+      type = types.int;
+      default = 7200;
+      description = ''
+        Automatically stop (and archive) a live session after this many
+        seconds without activity (session start, question start/stop, student
+        answer, or student question). 0 disables auto-stop.
+      '';
+    };
+
+    idleCheckInterval = mkOption {
+      type = types.int;
+      default = 300;
+      description = "How often, in seconds, to check for idle sessions";
+    };
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = cfg.archiveDir == null || lib.hasPrefix "/var/lib/" cfg.archiveDir;
+        message = "services.classroom-qa.archiveDir must be under /var/lib/ (or null)";
+      }
+    ];
+
     # Create user and group
     users.users.${cfg.user} = {
       isSystemUser = true;
@@ -105,7 +156,8 @@ in {
       description = "Classroom QA service user";
     };
 
-    users.groups.${cfg.group} = {};
+    # archiveReaders join the service group to read the archives
+    users.groups.${cfg.group}.members = cfg.archiveReaders;
 
     # Bundled Redis service
     systemd.services.classroom-qa-redis = {
@@ -145,6 +197,10 @@ in {
         RATE_LIMIT_WINDOW = toString cfg.rateLimitWindow;
         MAX_QUESTION_LENGTH = toString cfg.maxQuestionLength;
         SESSION_TTL = toString cfg.sessionTTL;
+        IDLE_SESSION_TIMEOUT = toString cfg.idleSessionTimeout;
+        IDLE_CHECK_INTERVAL = toString cfg.idleCheckInterval;
+      } // lib.optionalAttrs (cfg.archiveDir != null) {
+        ARCHIVE_DIR = cfg.archiveDir;
       };
 
       serviceConfig = {
@@ -157,12 +213,21 @@ in {
         # Load secret key from file
         LoadCredential = "secret-key:${cfg.secretKeyFile}";
 
+        # Files the service creates (session archives) are readable by its
+        # group but not by other users
+        UMask = "0027";
+
         # Security hardening
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         ReadOnlyPaths = cfg.coursesFile;
+      } // lib.optionalAttrs (cfg.archiveDir != null) {
+        # Created (and made writable despite ProtectSystem) by systemd before
+        # the service starts, owned by user:group
+        StateDirectory = lib.removePrefix "/var/lib/" cfg.archiveDir;
+        StateDirectoryMode = "0750";
       };
 
       # Set SECRET_KEY from credential file and run uvicorn

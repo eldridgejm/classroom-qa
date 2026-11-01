@@ -49,6 +49,21 @@ class Settings(BaseSettings):
         default=172800, description="Session archive TTL after end (seconds)"
     )
 
+    # Archives on disk (unset or empty = only archive to Redis)
+    archive_dir: str | None = Field(
+        default=None,
+        description="Directory to also write session archives to, as <dir>/<course>/<id>.json",
+    )
+
+    # Auto-stop of idle sessions
+    idle_session_timeout: int = Field(
+        default=7200,
+        description="Stop a live session after this many seconds without activity (0 = never)",
+    )
+    idle_check_interval: int = Field(
+        default=300, description="How often to check for idle sessions (seconds)"
+    )
+
     # Courses file path
     courses_file: str = Field(default="courses.toml", description="Path to courses TOML file")
 

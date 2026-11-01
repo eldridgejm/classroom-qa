@@ -3,13 +3,19 @@ Redis client for managing session state, questions, and responses
 """
 
 import json
+import logging
+import os
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any, cast
 
 import redis
 
+from app.archive_files import write_archive_file
 from app.models import EventType, QuestionType
+
+logger = logging.getLogger(__name__)
 
 
 class RedisClient:
@@ -101,6 +107,49 @@ class RedisClient:
         """Generate Redis key for Ask rate limiting"""
         return f"course:{course}:ratelimit:ask:{tsn}"
 
+    def last_activity_key(self, course: str) -> str:
+        """Generate Redis key for the time of the live session's last activity"""
+        return f"course:{course}:last_activity"
+
+    def stop_lock_key(self, course: str) -> str:
+        """
+        Generate Redis key for the lock held while stopping a session
+
+        Deliberately outside the course:{course}:* namespace, which
+        clear_session_data deletes while the lock is held.
+        """
+        return f"lock:course:{course}:stop"
+
+    # Activity tracking
+
+    def touch_activity(self, course: str) -> None:
+        """
+        Record that something happened in the course's session just now
+        (used to detect idle sessions)
+
+        Args:
+            course: Course slug
+        """
+        self.redis.set(self.last_activity_key(course), repr(time.time()))
+
+    def get_last_activity(self, course: str) -> float | None:
+        """
+        Get the time (Unix epoch seconds) of the session's last activity
+
+        Args:
+            course: Course slug
+
+        Returns:
+            Timestamp, or None if no activity has been recorded
+        """
+        value = cast(str | bytes | None, self.redis.get(self.last_activity_key(course)))
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            return None
+
     # Session operations
 
     def clear_session_data(self, course: str) -> None:
@@ -141,8 +190,14 @@ class RedisClient:
         # Start new session
         key = self.session_key(course)
         self.redis.set(key, "1")
+        self.touch_activity(course)
 
-    def stop_session(self, course: str, ttl: int | None = None) -> str:
+    def stop_session(
+        self,
+        course: str,
+        ttl: int | None = None,
+        archive_dir: str | os.PathLike[str] | None = None,
+    ) -> str:
         """
         Stop a session for a course
         Archives current session data and clears it.
@@ -150,6 +205,7 @@ class RedisClient:
         Args:
             course: Course slug
             ttl: Optional TTL in seconds for archived session (default: 172800 = 48 hours)
+            archive_dir: If set, also write the archive to <archive_dir>/<course>/<id>.json
 
         Returns:
             Session ID of archived session
@@ -159,7 +215,7 @@ class RedisClient:
             ttl = 172800
 
         # Archive current session
-        session_id = self.archive_session(course, ttl)
+        session_id = self.archive_session(course, ttl, archive_dir=archive_dir)
 
         # Clear current session data
         self.clear_session_data(course)
@@ -292,6 +348,7 @@ class RedisClient:
 
         # Set as current question
         self.set_current_question(course, qid)
+        self.touch_activity(course)
 
         return qid
 
@@ -333,6 +390,8 @@ class RedisClient:
         current_qid = self.get_current_question(course)
         if current_qid == qid:
             self.clear_current_question(course)
+
+        self.touch_activity(course)
 
     def mark_results_shared(self, course: str, qid: str) -> bool:
         """Mark a question's results as shared with students."""
@@ -393,6 +452,7 @@ class RedisClient:
             keys=[responses_key, counts_key],
             args=[tsn, answer_json, answer_value],
         )
+        self.touch_activity(course)
 
         # Convert result to dict
         counts = {}
@@ -549,13 +609,24 @@ class RedisClient:
 
     # Archive operations
 
-    def archive_session(self, course: str, ttl: int = 172800) -> str:
+    def archive_session(
+        self,
+        course: str,
+        ttl: int = 172800,
+        archive_dir: str | os.PathLike[str] | None = None,
+    ) -> str:
         """
         Archive current session data
+
+        The archive is stored in Redis with the given TTL. If archive_dir is set,
+        the same JSON is also written (atomically, permanently) to
+        <archive_dir>/<course>/<session_id>.json. A failure to write the file is
+        logged but does not prevent archiving to Redis.
 
         Args:
             course: Course slug
             ttl: TTL in seconds for archived session (default: 172800 = 48 hours)
+            archive_dir: Optional directory to also write the archive file to
 
         Returns:
             Session ID of archived session
@@ -622,9 +693,24 @@ class RedisClient:
         }
 
         # Store archive
+        archive_json = json.dumps(archive_data)
         key = self.archive_key(course, session_id)
-        self.redis.set(key, json.dumps(archive_data))
+        self.redis.set(key, archive_json)
         self.redis.expire(key, ttl)
+
+        # Also keep a permanent copy on disk
+        if archive_dir:
+            try:
+                path = write_archive_file(archive_dir, course, session_id, archive_json)
+                logger.info("Wrote archive %s", path)
+            except Exception:
+                logger.exception(
+                    "Failed to write archive %s for course %s to %s "
+                    "(it is still archived in Redis)",
+                    session_id,
+                    course,
+                    archive_dir,
+                )
 
         return session_id
 
@@ -732,6 +818,7 @@ class RedisClient:
         key = self.question_key(course, question_id)
         self.redis.set(key, json.dumps(question_data))
         self.redis.expire(key, ttl)
+        self.touch_activity(course)
 
         return question_id
 

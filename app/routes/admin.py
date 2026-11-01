@@ -13,6 +13,7 @@ import app.config
 from app.auth import create_admin_cookie, require_admin, verify_admin_cookie
 from app.models import EventType, QuestionType
 from app.redis_client import RedisClient
+from app.services import sessions
 from app.services.distribution import build_distribution
 
 router = APIRouter()
@@ -275,11 +276,14 @@ async def stop_session(
     if course_config is None:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Stop session in Redis, keeping the archive for the configured TTL
-    redis_client.stop_session(course, ttl=app.config.settings.session_ttl)
-
-    # Publish SSE event
-    redis_client.publish_event(course, EventType.SESSION_STOPPED, {})
+    # Archive (to Redis for the configured TTL, and to disk if configured),
+    # clear the session, and publish SESSION_STOPPED
+    try:
+        sessions.stop_session(redis_client, course, app.config.settings)
+    except sessions.StopInProgressError:
+        raise HTTPException(
+            status_code=409, detail="Session is already being stopped"
+        ) from None
 
     return SessionResponse(status="stopped")
 

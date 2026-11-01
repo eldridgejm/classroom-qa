@@ -76,6 +76,35 @@ Each response contains:
 
 Sessions are automatically archived when stopped and are retained based on the configured TTL (default: 48 hours). Instructors can download archived sessions as JSON files from the admin interface.
 
+### Archives on Disk
+
+If `ARCHIVE_DIR` is set, every archived session is also written to
+`$ARCHIVE_DIR/<course>/<session_id>.json`, with exactly the same JSON as the
+Redis archive. These files are permanent (the Redis copy still expires after
+`SESSION_TTL`), so other tools (e.g. a CI job recording attendance) can pick
+them up. Each file is written to a temporary file in the same directory
+(`.<session_id>.*.tmp`) and renamed into place, so a reader that looks only at
+`*.json` never sees a partial file. Files are created with mode `0640` and
+directories with `0750`, i.e. readable by the service's group. If writing the
+file fails, the error is logged and the session is still stopped and archived
+in Redis. When `ARCHIVE_DIR` is unset (the default outside NixOS), nothing is
+written to disk.
+
+### Idle Sessions
+
+A live session with no activity for `IDLE_SESSION_TIMEOUT` seconds (default: 2
+hours) is stopped automatically, exactly as if the instructor had clicked "Stop
+Session": it is archived (to Redis and, if configured, to disk) and open
+admin/student pages are told the session ended. Activity means the session
+starting, a question being started or stopped, a student answer, or a student
+question; the time of the last activity is kept in Redis at
+`course:<course>:last_activity`. A background task checks every
+`IDLE_CHECK_INTERVAL` seconds (default: 5 minutes), so a session is stopped
+between 2 hours and 2 hours 5 minutes after it went quiet. Stops (manual or
+automatic) hold a per-course Redis lock, so a session is archived only once
+even if several app processes check at the same time. Set
+`IDLE_SESSION_TIMEOUT=0` to disable auto-stop.
+
 ## Requirements
 
 ### Option 1: Using Nix (Recommended for full development environment)
@@ -143,6 +172,11 @@ MAX_QUESTION_LENGTH=1000  # Max question length
 
 # Session management
 SESSION_TTL=172800        # TTL in seconds (48 hours)
+IDLE_SESSION_TIMEOUT=7200 # Auto-stop sessions idle this long (0 = never)
+IDLE_CHECK_INTERVAL=300   # How often to check for idle sessions
+
+# Also write archives to <ARCHIVE_DIR>/<course>/<session_id>.json (default: unset)
+ARCHIVE_DIR=/path/to/archives
 
 # Courses file path (default: courses.toml)
 COURSES_FILE=courses.toml
@@ -279,6 +313,9 @@ uv run mypy app
 | `RATE_LIMIT_WINDOW` | `10` | Rate limit window (seconds) |
 | `MAX_QUESTION_LENGTH` | `1000` | Max student question length |
 | `SESSION_TTL` | `172800` | Session TTL after end (seconds) |
+| `ARCHIVE_DIR` | unset | Also write archives to `<dir>/<course>/<session_id>.json` (unset = disabled) |
+| `IDLE_SESSION_TIMEOUT` | `7200` | Auto-stop a session after this many idle seconds (`0` = never) |
+| `IDLE_CHECK_INTERVAL` | `300` | How often to check for idle sessions (seconds) |
 | `COURSES_FILE` | `courses.toml` | Path to courses configuration |
 
 ### courses.toml Format
@@ -319,6 +356,12 @@ The application includes a NixOS module for production deployment with bundled R
             rateLimitWindow = 10;
             maxQuestionLength = 1000;
             sessionTTL = 172800;
+            idleSessionTimeout = 7200;
+
+            # Archives on disk (default shown; null disables), and users
+            # who may read them
+            archiveDir = "/var/lib/classroom-qa/archives";
+            archiveReaders = [ "gha-runner" ];
           };
         }
       ];
@@ -400,6 +443,26 @@ journalctl -u classroom-qa-redis -f
 | `rateLimitWindow` | int | `10` | Window in seconds |
 | `maxQuestionLength` | int | `1000` | Max question length |
 | `sessionTTL` | int | `172800` | Session TTL (seconds) |
+| `archiveDir` | null or string | `/var/lib/classroom-qa/archives` | Where archives are also written (must be under `/var/lib`; `null` disables) |
+| `archiveReaders` | list of strings | `[]` | Users added to `group` so they can read the archives |
+| `idleSessionTimeout` | int | `7200` | Auto-stop idle sessions after this many seconds (`0` = never) |
+| `idleCheckInterval` | int | `300` | Idle check interval (seconds) |
+
+### Reading Archives as Another User
+
+`archiveDir` is a systemd `StateDirectory` of the service, owned by
+`user`:`group` with mode `0750`; the service runs with `UMask=0027`, and archive
+files are `0640`. So any member of `group` can read the archives, and nobody
+else can write them. To let another local user (say, a GitHub Actions runner
+running as `gha-runner`) read them, either set
+
+```nix
+services.classroom-qa.archiveReaders = [ "gha-runner" ];
+```
+
+or, equivalently, `users.users.gha-runner.extraGroups = [ "classroom-qa" ];`.
+Group membership is read when a process starts, so restart that user's
+services (e.g. the runner) after the change.
 
 ## Architecture
 
