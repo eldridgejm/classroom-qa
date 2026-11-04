@@ -16,43 +16,83 @@
 
     <script>
         // Open an EventSource that recovers from dropped connections. The server sends
-        // a `ping` event every 15s; if nothing arrives for 40s, or the browser gives up
-        // on the connection, the stream is reopened. `onOpen` runs on every (re)connect
-        // so the page can re-sync any state it missed while disconnected.
+        // a `ping` event every 15s; if nothing arrives for 40s, or the connection
+        // errors, the stream is reopened. `onOpen` runs on every (re)connect so the
+        // page can re-sync any state it missed while disconnected.
+        //
+        // Reconnects are done here, with a growing delay, rather than by the
+        // browser's built-in retry (every 3s in Chrome, forever). On 2026-11-03 one
+        // laptop had something between Chrome and the server that swallowed the
+        // stream: Chrome saw every connection fail at once and retried every 3s,
+        // while the server kept each old connection open, until nginx ran out of
+        // connections and the whole class lost the app. The delay only resets once
+        // an event actually arrives, so a stream that "opens" but never delivers
+        // anything backs off to one attempt a minute.
         function createLiveStream(url, onOpen) {
             const STALE_AFTER_MS = 40000;
+            const MIN_RETRY_MS = 2000;
+            const MAX_RETRY_MS = 60000;
             const handlers = [];
             let source = null;
             let lastActivity = Date.now();
+            let failures = 0;
+            let retryTimer = null;
 
             function touch() {
                 lastActivity = Date.now();
             }
 
+            // An event arrived, so the stream really works
+            function healthy() {
+                touch();
+                failures = 0;
+            }
+
             function connect() {
+                if (retryTimer !== null) {
+                    clearTimeout(retryTimer);
+                    retryTimer = null;
+                }
                 if (source) {
                     source.close();
                 }
                 touch();
                 source = new EventSource(url);
-                source.addEventListener('open', function() {
+                source.addEventListener('open', function(event) {
+                    if (event.target !== source) return;
                     touch();
                     onOpen();
                 });
-                source.addEventListener('ping', touch);
+                source.addEventListener('ping', function(event) {
+                    if (event.target === source) healthy();
+                });
                 source.addEventListener('error', function(event) {
-                    // EventSource retries by itself unless the connection is closed for good
-                    if (event.target.readyState === EventSource.CLOSED && event.target === source) {
-                        setTimeout(connect, 10000);
+                    if (event.target === source) {
+                        retryLater('stream error');
                     }
                 });
                 handlers.forEach(([name, handler]) => source.addEventListener(name, handler));
             }
 
+            // Close the stream now and reopen it after a delay that doubles with each
+            // consecutive failure (2s, 4s, 8s, ... up to 60s), with jitter so a whole
+            // class doesn't reconnect in lockstep after a server restart
+            function retryLater(reason) {
+                if (source) {
+                    source.close();
+                    source = null;
+                }
+                if (retryTimer !== null) return;
+                const base = Math.min(MAX_RETRY_MS, MIN_RETRY_MS * 2 ** failures);
+                const delay = base / 2 + Math.random() * (base / 2);
+                failures += 1;
+                console.warn(`SSE: ${reason}, reconnecting in ${Math.round(delay / 1000)}s`);
+                retryTimer = setTimeout(connect, delay);
+            }
+
             setInterval(function() {
-                if (Date.now() - lastActivity > STALE_AFTER_MS) {
-                    console.warn('SSE: stream went quiet, reconnecting');
-                    connect();
+                if (retryTimer === null && Date.now() - lastActivity > STALE_AFTER_MS) {
+                    retryLater('stream went quiet');
                 }
             }, 5000);
 
@@ -69,11 +109,14 @@
             return {
                 addEventListener(name, handler) {
                     const wrapped = function(event) {
-                        touch();
+                        if (event.target !== source) return;
+                        healthy();
                         handler(event);
                     };
                     handlers.push([name, wrapped]);
-                    source.addEventListener(name, wrapped);
+                    if (source) {
+                        source.addEventListener(name, wrapped);
+                    }
                 },
             };
         }

@@ -233,6 +233,10 @@ in {
         Restart = "always";
         RestartSec = "5s";
 
+        # Every live student stream holds its own Redis connection; the
+        # default soft limit of 1024 open files caps Redis near 1000 clients
+        LimitNOFILE = 65536;
+
         # Security hardening
         NoNewPrivileges = true;
         PrivateTmp = true;
@@ -274,6 +278,11 @@ in {
         Group = cfg.group;
         Restart = "always";
         RestartSec = "5s";
+
+        # Each live student stream uses two file descriptors (the socket
+        # from nginx and a Redis connection), so the default soft limit of
+        # 1024 open files would cap a lecture at about 500 students
+        LimitNOFILE = 65536;
 
         # Load secret key from file
         LoadCredential = "secret-key:${cfg.secretKeyFile}";
